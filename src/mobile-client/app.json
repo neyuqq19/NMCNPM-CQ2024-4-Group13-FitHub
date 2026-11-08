@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "FitHub Mobile",
+    "slug": "fithub-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#141416",
+    "StatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#141416"
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "package": "vn.fithub.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#141416"
+      },
+      "usesCleartextTraffic": true
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}

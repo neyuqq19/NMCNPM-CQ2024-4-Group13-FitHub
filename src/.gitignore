@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.expo/
+.env
+.env.*
+!.env.example
+!.env.test.example
+.local/
+coverage/
+*.tsbuildinfo
+android/
+ios/
+
+# Browser-test artifacts can contain test-session tokens.
+test-results/
+playwright-report/
