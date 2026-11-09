@@ -297,7 +297,8 @@ input:focus {
 .main-content {
   margin-left: var(--sidebar-width);
   padding: 28px 36px 64px;
-  max-width: 1600px;
+  max-width: none;
+  min-width: 0;
   min-height: calc(100vh - var(--header));
 }
 .breadcrumb {
@@ -1142,7 +1143,8 @@ a.member-action:focus-visible {
 }
 
 .checkin-panel {
-  max-width: 900px;
+  max-width: none;
+  min-width: 0;
 }
 .checkin-toolbar {
   display: flex;
