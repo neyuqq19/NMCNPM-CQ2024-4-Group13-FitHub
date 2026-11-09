@@ -383,13 +383,19 @@ export class AuthService {
     );
 
     const effectiveState =
-      ["ACTIVE", "SCHEDULED"].includes(latest.status) &&
-      startsOn <= refToday &&
-      endsBefore > refToday
-        ? "ACTIVE"
-        : latest.status === "EXPIRED" || endsBefore <= refToday
-          ? "EXPIRED"
-          : latest.status;
+      latest.status === "FROZEN" || latest.status === "CANCELLED"
+        ? latest.status
+        : latest.payment?.status !== "CONFIRMED"
+          ? "PENDING_PAYMENT"
+          : ["ACTIVE", "SCHEDULED"].includes(latest.status) &&
+              startsOn <= refToday &&
+              endsBefore > refToday
+            ? "ACTIVE"
+            : startsOn > refToday
+              ? "SCHEDULED"
+              : latest.status === "EXPIRED" || endsBefore <= refToday
+                ? "EXPIRED"
+                : latest.status;
 
     return {
       state: effectiveState,

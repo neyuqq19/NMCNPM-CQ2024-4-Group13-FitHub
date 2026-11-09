@@ -262,3 +262,9 @@ export interface DashboardDto {
   confirmedPaymentsToday: number;
   recentPayments: PaymentDetailDto[];
 }
+
+export interface MyCheckInSummaryDto {
+  serverTime: string;
+  sessionsThisMonth: number;
+  week: { date: string; count: number }[];
+}

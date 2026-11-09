@@ -1,13 +1,27 @@
 import { ArrowLeft, Check, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
-export function Brand() {
+export function Brand({
+  variant = "default",
+}: {
+  variant?: "default" | "inverse";
+}) {
   return (
     <Link to="/" className="brand" aria-label="FitHub — Trang chủ">
       <span className="brand-icon">
-        <img src="/fithub-mark.svg" width="20" height="20" alt="" />
+        <img src="/fithub-mark.png" width="38" height="38" alt="" />
       </span>
-      <span>FitHub</span>
+      <img
+        className="brand-wordmark"
+        src={
+          variant === "inverse"
+            ? "/fithub-wordmark-inverse.png"
+            : "/fithub-wordmark.png"
+        }
+        width="100"
+        height="24"
+        alt=""
+      />
     </Link>
   );
 }

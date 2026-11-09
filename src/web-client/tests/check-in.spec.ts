@@ -4,6 +4,9 @@ import { checkInFixture } from "../../backend/test/check-in-fixture";
 const api = "http://127.0.0.1:3101";
 async function login(page: Page) {
   await page.goto("/check-in");
+  await page
+    .getByLabel("Email hoặc số điện thoại", { exact: true })
+    .fill("admin@fithub.vn");
   await page.getByLabel("Mật khẩu", { exact: true }).fill("FitHubDemo!2026");
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
   await page.getByRole("link", { name: "Check-in", exact: true }).click();
