@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  Header,
   HttpCode,
   Inject,
   Module,
@@ -91,8 +92,13 @@ class SalesController {
       .validateSession(h)
       .then((u) => this.sales.decide(u, id, null));
   }
-  @Get("dashboard") dashboard(@Headers("authorization") h?: string) {
-    return this.auth.validateSession(h).then((u) => this.sales.dashboard(u));
+  @Get("dashboard")
+  @Header("Cache-Control", "no-store")
+  dashboard(
+    @Query() q: Record<string, string>,
+    @Headers("authorization") h?: string,
+  ) {
+    return this.auth.validateSession(h).then((u) => this.sales.dashboard(u, q));
   }
 }
 @Module({

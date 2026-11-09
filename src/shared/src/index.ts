@@ -254,6 +254,9 @@ export interface ConfirmPaymentRequest {
   amount: number;
 }
 export interface DashboardDto {
+  range: "7d" | "30d" | "month";
+  newMembers: number;
+  checkInSeries: { date: string; count: number }[];
   day: string;
   activeMembers: number;
   pendingMembers: number;

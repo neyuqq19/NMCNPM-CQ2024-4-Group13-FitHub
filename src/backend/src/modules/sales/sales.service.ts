@@ -505,10 +505,30 @@ export class SalesService {
         throw error;
       });
   }
-  async dashboard(user: CurrentUser) {
+  async dashboard(user: CurrentUser, query: Record<string, string> = {}) {
     this.requireAdmin(user);
-    const day = gymClock(new Date()).day,
-      start = new Date(`${day}T00:00:00+07:00`),
+    const today = gymClock(new Date()).day;
+    const day = query.date ?? today;
+    const range = query.range ?? "7d";
+    if (
+      typeof day !== "string" ||
+      typeof range !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+      !Number.isFinite(Date.parse(day)) ||
+      new Date(day).toISOString().slice(0, 10) !== day ||
+      day > today ||
+      !["7d", "30d", "month"].includes(range)
+    ) {
+      throw new BadRequestException({
+        code: "INVALID_DASHBOARD_QUERY",
+        message: "Ngày hoặc khoảng thống kê không hợp lệ.",
+      });
+    }
+    const first = new Date(`${day}T00:00:00Z`);
+    if (range === "month") first.setUTCDate(1);
+    else first.setUTCDate(first.getUTCDate() - (range === "7d" ? 6 : 29));
+    const rangeStart = first.toISOString().slice(0, 10);
+    const start = new Date(`${day}T00:00:00+07:00`),
       end = new Date(start.getTime() + 86400000);
     return this.db.$transaction(
       async (tx) => {
@@ -517,31 +537,59 @@ export class SalesService {
           code: { not: { startsWith: "GD-TESTQR-" } },
           confirmedAt: { gte: start, lt: end },
         };
-        const [activeMembers, pendingMembers, checkInsToday, totals, recent] =
-          await Promise.all([
-            tx.memberProfile.count({
-              where: { user: { status: "ACTIVE", verifiedAt: { not: null } } },
-            }),
-            tx.memberProfile.count({
-              where: { user: { status: "PENDING_VERIFY" } },
-            }),
-            tx.checkInRecord.count({
-              where: { checkedInAt: { gte: start, lt: end } },
-            }),
-            tx.payment.aggregate({
-              where,
-              _sum: { amount: true },
-              _count: { _all: true },
-            }),
-            tx.payment.findMany({
-              where,
-              include: includePayment,
-              orderBy: [{ confirmedAt: "desc" }, { id: "desc" }],
-              take: 5,
-            }),
-          ]);
+        const [
+          activeMembers,
+          pendingMembers,
+          checkInsToday,
+          totals,
+          recent,
+          newMembers,
+          checkIns,
+        ] = await Promise.all([
+          tx.memberProfile.count({
+            where: { user: { status: "ACTIVE", verifiedAt: { not: null } } },
+          }),
+          tx.memberProfile.count({
+            where: { user: { status: "PENDING_VERIFY" } },
+          }),
+          tx.checkInRecord.count({
+            where: { checkedInAt: { gte: start, lt: end } },
+          }),
+          tx.payment.aggregate({
+            where,
+            _sum: { amount: true },
+            _count: { _all: true },
+          }),
+          tx.payment.findMany({
+            where,
+            include: includePayment,
+            orderBy: [{ confirmedAt: "desc" }, { id: "desc" }],
+            take: 5,
+          }),
+          tx.memberProfile.count({
+            where: { createdAt: { gte: start, lt: end } },
+          }),
+          tx.$queryRaw<
+            { day: string; count: bigint }[]
+          >`SELECT to_char("checkedInAt" AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') AS day, count(*) AS count FROM "CheckInRecord" WHERE "checkedInAt" >= ${new Date(`${rangeStart}T00:00:00+07:00`)} AND "checkedInAt" < ${end} GROUP BY day ORDER BY day`,
+        ]);
+        const checkInSeries: { date: string; count: number }[] = [];
+        for (
+          let cursor = first.getTime();
+          cursor <= Date.parse(`${day}T00:00:00Z`);
+          cursor += 86400000
+        ) {
+          const date = new Date(cursor).toISOString().slice(0, 10);
+          checkInSeries.push({
+            date,
+            count: Number(checkIns.find((r) => r.day === date)?.count ?? 0),
+          });
+        }
         return {
           day,
+          range,
+          newMembers,
+          checkInSeries,
           activeMembers,
           pendingMembers,
           checkInsToday,
