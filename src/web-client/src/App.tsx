@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
   Link,
   Navigate,
@@ -13,14 +13,12 @@ import {
   LayoutGrid,
   Users,
   ReceiptText,
-  Zap,
   Menu,
   X,
-  Eye,
-  EyeOff,
   ScanLine,
 } from "lucide-react";
-import { Brand, FieldError, Notice, PageHeading } from "./components";
+import { Brand, Notice, PageHeading } from "./components";
+import { AdminLogin } from "./pages/AdminLogin";
 import { Dashboard } from "./pages/Dashboard";
 
 import { CheckInPage } from "./pages/CheckIn";
@@ -34,107 +32,6 @@ import {
 
 import type { CurrentUser } from "@fithub/contracts";
 import { apiService, ApiError } from "./services/api.service";
-function Login({ onLogin }: { onLogin: (user: CurrentUser) => void }) {
-  const [email, setEmail] = useState("admin@fithub.vn");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [visible, setVisible] = useState(false);
-  const [busy, setBusy] = useState(false);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      let deviceId = localStorage.getItem("fithub_device");
-      if (!deviceId) {
-        deviceId = crypto.randomUUID();
-        localStorage.setItem("fithub_device", deviceId);
-      }
-      const result = await apiService.login({
-        identifier: email,
-        password,
-        platform: "WEB",
-        deviceId,
-        requestId: crypto.randomUUID(),
-      });
-      if (result.accessToken)
-        sessionStorage.setItem("fithub_token", result.accessToken);
-      if (result.user.role !== "ADMIN") {
-        await apiService.logout();
-        sessionStorage.removeItem("fithub_token");
-        throw new Error("Chỉ Admin có quyền quản lý hội viên.");
-      }
-      onLogin(result.user);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Không thể đăng nhập.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <main className="login-page">
-      <form className="login-card" onSubmit={submit} noValidate>
-        <h1>FitHub</h1>
-        <h2>Đăng nhập quản trị</h2>
-        <p>Dành cho quản trị viên và nhân viên lễ tân.</p>
-        <div className="login-fields">
-          <label className="field">
-            Email hoặc số điện thoại
-            <input
-              autoComplete="username"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError("");
-              }}
-              aria-invalid={!!error}
-              aria-describedby={error ? "login-error" : undefined}
-            />
-          </label>
-          <label className="field">
-            Mật khẩu
-            <span className="password-control">
-              <input
-                type={visible ? "text" : "password"}
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setError("");
-                }}
-                aria-invalid={!!error}
-                aria-describedby={error ? "login-error" : "demo-help"}
-              />
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => setVisible(!visible)}
-                aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-              >
-                {visible ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </span>
-          </label>
-        </div>
-        <FieldError id="login-error" message={error} />
-        <button className="button primary" type="submit" disabled={busy}>
-          {busy ? "Đang đăng nhập…" : "Đăng nhập"}
-        </button>
-        <p className="login-help">
-          Không truy cập được? Liên hệ quản trị viên.
-        </p>
-        <details className="demo-help" id="demo-help">
-          <summary>Tài khoản phát triển</summary>
-          <p>
-            Mật khẩu: <code>FitHubDemo!2026</code>
-          </p>
-          <p>Đăng nhập bằng tài khoản được cấp trên máy chủ FitHub.</p>
-        </details>
-      </form>
-    </main>
-  );
-}
 function Shell({
   onLogout,
   user,
@@ -321,7 +218,7 @@ export function App() {
             user ? (
               <Navigate to="/members" replace />
             ) : (
-              <Login onLogin={login} />
+              <AdminLogin onLogin={login} />
             )
           }
         />
