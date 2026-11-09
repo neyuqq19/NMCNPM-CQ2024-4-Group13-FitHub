@@ -483,15 +483,13 @@ test("UC03-11: member session expiry and replacement login invalidate previously
   clock = baseline();
   const f2 = await member();
   const q2 = await issue(f2.s.token);
-  const login = await api
-    .post("/api/auth/login")
-    .send({
-      identifier: f2.u.email,
-      password: "UC03Test!2026",
-      platform: "MOBILE",
-      deviceId: randomUUID(),
-      requestId: randomUUID(),
-    });
+  const login = await api.post("/api/auth/login").send({
+    identifier: f2.u.email,
+    password: "UC03Test!2026",
+    platform: "MOBILE",
+    deviceId: randomUUID(),
+    requestId: randomUUID(),
+  });
   assert.equal(login.status, 200);
   assert.equal(
     (await scan(q2.body.payload)).body.code,
@@ -526,4 +524,52 @@ test("UC03-12: concurrent QR requests reuse one period; purchased hour policy re
       .accessWindowSnapshot,
     "OFF_PEAK",
   );
+});
+
+test("Mobile summary: own check-ins, weekly counts and access control", async () => {
+  clock = baseline();
+  const m = await member();
+  const other = await member();
+  await api.get("/api/check-ins/my/summary").expect(401);
+  await api
+    .get("/api/check-ins/my/summary")
+    .set(headers(adminToken))
+    .expect(403);
+  const empty = await api
+    .get("/api/check-ins/my/summary")
+    .set(headers(m.s.token))
+    .expect(200);
+  assert.equal(empty.body.sessionsThisMonth, 0);
+  assert.equal(empty.body.week.length, 7);
+  const scanner = await api
+    .post("/api/check-ins/scanners")
+    .set(headers(adminToken))
+    .send({ deviceId: randomUUID(), label: "Summary" });
+  const qr = await issue(m.s.token);
+  await api
+    .post("/api/check-ins/scan")
+    .set(headers(adminToken))
+    .send({
+      scannerId: scanner.body.id,
+      requestId: randomUUID(),
+      payload: qr.body.payload,
+    })
+    .expect(200);
+  const result = await api
+    .get("/api/check-ins/my/summary")
+    .set(headers(m.s.token))
+    .expect(200);
+  assert.equal(result.body.sessionsThisMonth, 1);
+  assert.equal(
+    result.body.week.reduce(
+      (n: number, d: { count: number }) => n + d.count,
+      0,
+    ),
+    1,
+  );
+  const isolated = await api
+    .get("/api/check-ins/my/summary")
+    .set(headers(other.s.token))
+    .expect(200);
+  assert.equal(isolated.body.sessionsThisMonth, 0);
 });

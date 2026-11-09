@@ -48,6 +48,57 @@ export class CheckInsService {
   now() {
     return new Date();
   }
+  async mySummary(
+    header?: string,
+  ): Promise<import("@fithub/contracts").MyCheckInSummaryDto> {
+    return this.db.$transaction(async (tx) => {
+      const session = await this.session(tx, header, "MEMBER");
+      const profile = await tx.memberProfile.findUnique({
+        where: { userId: session.userId },
+      });
+      const now = this.now();
+      const today = new Date(now.getTime() + 7 * 3600000)
+        .toISOString()
+        .slice(0, 10);
+      const monday = new Date(`${today}T00:00:00Z`);
+      monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+      const week = Array.from({ length: 7 }, (_, i) => ({
+        date: new Date(monday.getTime() + i * 86400000)
+          .toISOString()
+          .slice(0, 10),
+        count: 0,
+      }));
+      const monthStart = new Date(`${today.slice(0, 7)}-01T00:00:00+07:00`);
+      const weekStart = new Date(`${week[0].date}T00:00:00+07:00`);
+      const records = profile
+        ? await tx.checkInRecord.findMany({
+            where: {
+              memberId: profile.id,
+              checkedInAt: {
+                gte: new Date(
+                  Math.min(monthStart.getTime(), weekStart.getTime()),
+                ),
+                lte: now,
+              },
+            },
+            select: { checkedInAt: true },
+          })
+        : [];
+      for (const record of records) {
+        const day = new Date(record.checkedInAt.getTime() + 7 * 3600000)
+          .toISOString()
+          .slice(0, 10);
+        const entry = week.find((d) => d.date === day);
+        if (entry) entry.count++;
+      }
+      return {
+        serverTime: now.toISOString(),
+        sessionsThisMonth: records.filter((r) => r.checkedInAt >= monthStart)
+          .length,
+        week,
+      };
+    });
+  }
   private secret() {
     return process.env.CHECKIN_SIGNING_SECRET || developmentSecret;
   }

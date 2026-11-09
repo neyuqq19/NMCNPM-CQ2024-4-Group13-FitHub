@@ -27,6 +27,11 @@ class ScanDto {
 @Controller("api/check-ins")
 class CheckInsController {
   constructor(@Inject(CheckInsService) private service: CheckInsService) {}
+  @Get("my/summary")
+  @Header("Cache-Control", "no-store")
+  summary(@Headers("authorization") header?: string) {
+    return this.service.mySummary(header);
+  }
   @Post("qr")
   @Header("Cache-Control", "no-store")
   @HttpCode(200)
