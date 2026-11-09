@@ -66,6 +66,8 @@ test("Web brand: cropped artwork, correct background variants, responsive header
   ).toBeVisible();
   for (const width of [390, 768, 1280, 1920]) {
     await page.setViewportSize({ width, height: 1000 });
+    if (width <= 680)
+      await page.getByRole("button", { name: "Mở menu", exact: true }).click();
     const brand = page.getByRole("link", {
       name: "FitHub — Trang chủ",
       exact: true,
@@ -78,7 +80,11 @@ test("Web brand: cropped artwork, correct background variants, responsive header
       logout = await page
         .getByRole("button", { name: "Đăng xuất", exact: true })
         .boundingBox();
-    expect(logo!.x + logo!.width).toBeLessThan(logout!.x);
+    if (width > 680) expect(logo!.x + logo!.width).toBeLessThan(logout!.x);
+    if (width <= 680)
+      await page
+        .getByRole("button", { name: "Đóng menu", exact: true })
+        .click();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
