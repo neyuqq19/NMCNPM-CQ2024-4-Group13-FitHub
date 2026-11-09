@@ -3,25 +3,34 @@ import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 export function Brand({
   variant = "default",
+  collapsed = false,
 }: {
   variant?: "default" | "inverse";
+  collapsed?: boolean;
 }) {
   return (
-    <Link to="/" className="brand" aria-label="FitHub — Trang chủ">
+    <Link
+      to="/"
+      className={`brand ${collapsed ? "is-collapsed" : ""}`}
+      aria-label="FitHub — Trang chủ"
+      title="FitHub — Trang chủ"
+    >
       <span className="brand-icon">
         <img src="/fithub-mark.png" width="38" height="38" alt="" />
       </span>
-      <img
-        className="brand-wordmark"
-        src={
-          variant === "inverse"
-            ? "/fithub-wordmark-inverse.png"
-            : "/fithub-wordmark.png"
-        }
-        width="100"
-        height="24"
-        alt=""
-      />
+      {!collapsed && (
+        <img
+          className="brand-wordmark"
+          src={
+            variant === "inverse"
+              ? "/fithub-wordmark-inverse.png"
+              : "/fithub-wordmark.png"
+          }
+          width="100"
+          height="24"
+          alt=""
+        />
+      )}
     </Link>
   );
 }

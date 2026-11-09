@@ -425,6 +425,7 @@ export function HistoryPage() {
         }}
       >
         <input
+          className="search-field"
           aria-label="Tìm giao dịch"
           placeholder="Mã giao dịch, mã hoặc tên hội viên"
           value={search}

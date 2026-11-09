@@ -16,6 +16,8 @@ import {
   Menu,
   X,
   ScanLine,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Brand, Notice, PageHeading } from "./components";
 import { AdminLogin } from "./pages/AdminLogin";
@@ -40,6 +42,26 @@ function Shell({
   user: CurrentUser;
 }) {
   const [menu, setMenu] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("fithub_sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  function toggleSidebar() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("fithub_sidebar_collapsed", String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  }
+
   const location = useLocation();
   useEffect(() => {
     setMenu(false);
@@ -56,7 +78,7 @@ function Shell({
     return () => window.removeEventListener("keydown", close);
   }, []);
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
       <a
         className="skip-link"
         href="#main-content"
@@ -78,7 +100,6 @@ function Shell({
           >
             {menu ? <X /> : <Menu />}
           </button>
-          <Brand />
         </div>
         <div className="account">
           <span className="avatar" aria-hidden="true">
@@ -100,27 +121,53 @@ function Shell({
           onClick={() => setMenu(false)}
         />
       )}
-      <aside id="sidebar" className={`sidebar ${menu ? "is-open" : ""}`}>
-        <nav aria-label="Điều hướng quản trị">
-          <p className="nav-label">ĐIỀU HƯỚNG QUẢN TRỊ</p>
-          <NavLink to="/" end>
-            <LayoutGrid size={18} />
-            Tổng quan
+      <aside
+        id="sidebar"
+        className={`sidebar ${menu ? "is-open" : ""} ${collapsed ? "is-collapsed" : ""}`}
+      >
+        <div className="sidebar-brand">
+          <Brand collapsed={collapsed} />
+        </div>
+        <nav aria-label="Điều hướng quản trị" className="sidebar-nav">
+          {!collapsed && <p className="nav-label">ĐIỀU HƯỚNG QUẢN TRỊ</p>}
+          <NavLink to="/" end title={collapsed ? "Tổng quan" : undefined}>
+            <LayoutGrid size={22} />
+            {!collapsed && <span>Tổng quan</span>}
           </NavLink>
-          <p className="nav-label">NGHIỆP VỤ QUẦY LỄ TÂN</p>
-          <NavLink to="/members">
-            <Users size={18} />
-            Hội viên
+          {!collapsed && <p className="nav-label">NGHIỆP VỤ QUẦY LỄ TÂN</p>}
+          <NavLink to="/members" title={collapsed ? "Hội viên" : undefined}>
+            <Users size={22} />
+            {!collapsed && <span>Hội viên</span>}
           </NavLink>
-          <NavLink to="/check-in">
-            <ScanLine size={18} />
-            Check-in
+          <NavLink to="/check-in" title={collapsed ? "Check-in" : undefined}>
+            <ScanLine size={22} />
+            {!collapsed && <span>Check-in</span>}
           </NavLink>
-          <NavLink to="/history">
-            <ReceiptText size={18} />
-            Giao dịch
+          <NavLink to="/history" title={collapsed ? "Giao dịch" : undefined}>
+            <ReceiptText size={22} />
+            {!collapsed && <span>Giao dịch</span>}
           </NavLink>
         </nav>
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className="sidebar-collapse-button"
+            onClick={toggleSidebar}
+            title={
+              collapsed
+                ? "Mở rộng thanh điều hướng"
+                : "Thu gọn thanh điều hướng"
+            }
+            aria-label={
+              collapsed
+                ? "Mở rộng thanh điều hướng"
+                : "Thu gọn thanh điều hướng"
+            }
+          >
+            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {!collapsed && <span>Thu gọn</span>}
+          </button>
+        </div>
       </aside>
       <main id="main-content" className="main-content" tabIndex={-1}>
         <Outlet />

@@ -35,7 +35,11 @@ async function fillsAvailableWidth(page: Page) {
   if (metrics.viewport > 680)
     expect(metrics.left).toBeGreaterThanOrEqual(metrics.sidebarRight - 1);
   else expect(metrics.left).toBe(0);
-  const panel = main.locator(".panel").first();
+  const panel = main
+    .locator(
+      ".dashboard-stats, .panel:not(.dashboard-chart):not(.dashboard-activity)",
+    )
+    .first();
   if (await panel.count()) {
     const rect = await panel.boundingBox();
     expect(

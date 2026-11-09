@@ -313,3 +313,105 @@ test("DB sales 09: end dates clamp at calendar month ends including leap years",
     "2028-02-29",
   );
 });
+
+test("Dashboard: selected dates, Vietnam boundaries, zero-filled ranges and invalid queries", async () => {
+  for (const [selected, range, length] of [
+    ["2026-03-01", "7d", 7],
+    ["2026-03-01", "30d", 30],
+    ["2024-02-29", "month", 29],
+  ] as const) {
+    const response = await api
+      .get(`/api/dashboard?date=${selected}&range=${range}`)
+      .set(auth())
+      .expect(200);
+    const report = response.body;
+    assert.equal(report.day, selected);
+    assert.equal(report.checkInSeries.length, length);
+    assert.equal(report.checkInSeries.at(-1).date, selected);
+    const start = new Date(`${selected}T00:00:00+07:00`);
+    const end = new Date(start.getTime() + 86400000);
+    assert.equal(
+      report.checkInsToday,
+      await db.checkInRecord.count({
+        where: { checkedInAt: { gte: start, lt: end } },
+      }),
+    );
+    assert.equal(
+      report.newMembers,
+      await db.memberProfile.count({
+        where: { createdAt: { gte: start, lt: end } },
+      }),
+    );
+    for (const point of report.checkInSeries) {
+      const from = new Date(`${point.date}T00:00:00+07:00`);
+      assert.equal(
+        point.count,
+        await db.checkInRecord.count({
+          where: {
+            checkedInAt: { gte: from, lt: new Date(from.getTime() + 86400000) },
+          },
+        }),
+      );
+    }
+  }
+  for (const query of [
+    "date=2026-02-30",
+    "date=invalid",
+    "date=9999-01-01",
+    "range=year",
+    "date=",
+    "range=",
+  ]) {
+    const r = await api.get(`/api/dashboard?${query}`).set(auth()).expect(400);
+    assert.equal(r.body.code, "INVALID_DASHBOARD_QUERY");
+  }
+});
+
+test("Dashboard: Vietnam midnight includes start and excludes next day", async () => {
+  const f = await fixture();
+  const order = (await register(f.id)).body;
+  await confirm(order);
+  const scanner = await api
+    .post("/api/check-ins/scanners")
+    .set(auth())
+    .send({ deviceId: randomUUID(), label: "Dashboard boundary test" })
+    .expect(200);
+  const selected = "2024-02-29";
+  const start = new Date(`${selected}T00:00:00+07:00`);
+  const end = new Date(start.getTime() + 86400000);
+  const before = await api
+    .get(`/api/dashboard?date=${selected}`)
+    .set(auth())
+    .expect(200);
+  for (const checkedInAt of [
+    new Date(start.getTime() - 1),
+    start,
+    new Date(end.getTime() - 1),
+    end,
+  ]) {
+    await db.checkInTransaction.create({
+      data: {
+        id: randomUUID(),
+        scannerId: scanner.body.id,
+        payloadHash: "dashboard-test",
+        result: { accepted: true },
+        record: {
+          create: {
+            memberId: f.id,
+            membershipId: order.membership.id,
+            checkedInAt,
+          },
+        },
+      },
+    });
+  }
+  const after = await api
+    .get(`/api/dashboard?date=${selected}`)
+    .set(auth())
+    .expect(200);
+  assert.equal(after.body.checkInsToday, before.body.checkInsToday + 2);
+  assert.equal(
+    after.body.checkInSeries.at(-1).count,
+    before.body.checkInSeries.at(-1).count + 2,
+  );
+});

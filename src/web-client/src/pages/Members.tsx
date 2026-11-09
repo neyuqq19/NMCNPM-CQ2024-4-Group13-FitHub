@@ -409,7 +409,7 @@ export function MemberList() {
                 description="Thử đổi tiêu chí hoặc thêm hội viên mới."
               />
             )}
-            <div className="actions">
+            <div className="pagination">
               <button
                 className="button outline"
                 disabled={result.page <= 1}

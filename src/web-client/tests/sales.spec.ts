@@ -97,7 +97,7 @@ test("DB sales web: real package/order/payment survives response loss, reload an
   await expect(page.getByRole("heading", { name: /Xin chào/ })).toBeVisible();
   await expect(page.getByText(/Phantom local customer/)).toHaveCount(0);
   await expect(
-    page.getByText("DOANH THU HÔM NAY", { exact: true }),
+    page.getByRole("heading", { name: "Doanh thu", exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: "test-results/database-dashboard.png",
