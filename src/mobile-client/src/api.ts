@@ -193,3 +193,11 @@ export const verifyEmailOtp = (
       body: JSON.stringify({ verificationId, code, password, confirmPassword }),
     },
   );
+
+export const getMyCheckInSummary = (baseUrl: string, session: MobileSession) =>
+  mobileRequest<import("@fithub/contracts").MyCheckInSummaryDto>(
+    baseUrl,
+    "/api/check-ins/my/summary",
+    {},
+    session.accessToken,
+  );

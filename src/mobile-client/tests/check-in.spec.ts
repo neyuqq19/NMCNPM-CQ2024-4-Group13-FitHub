@@ -9,7 +9,7 @@ async function login(page: Page, hasPackage = true) {
     .fill(f.email);
   await page.getByLabel("Mật khẩu", { exact: true }).fill(f.password);
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
-  await page.getByRole("button", { name: "Check-in", exact: true }).click();
+  await page.getByRole("button", { name: "Mã QR", exact: true }).click();
   return f;
 }
 test("UC03 mobile: real QR cannot be tapped to succeed; server scan drives success and reload retains cooldown", async ({
@@ -56,7 +56,7 @@ test("UC03 mobile: real QR cannot be tapped to succeed; server scan drives succe
     fullPage: true,
   });
   await page.reload();
-  await page.getByRole("button", { name: "Check-in", exact: true }).click();
+  await page.getByRole("button", { name: "Mã QR", exact: true }).click();
   await expect(
     page.getByText("Chưa thể check-in lại trong vòng 10 phút.", {
       exact: true,

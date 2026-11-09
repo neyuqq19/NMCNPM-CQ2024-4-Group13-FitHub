@@ -25,6 +25,7 @@ import {
   setSessionExpiredHandler,
 } from "./src/api";
 import { clearSession, loadSession, saveSession } from "./src/session";
+import { HomePanel } from "./src/HomePanel";
 import { CheckInPanel } from "./src/CheckInPanel";
 import { AuthPanel } from "./src/AuthPanel";
 import { SPORTS_IMAGES } from "./src/sportsImages";
@@ -309,7 +310,7 @@ function MetaballBottomDock({
               key={i}
               accessibilityRole="button"
               accessibilityLabel={
-                ["Trang chủ", "Gói tập của tôi", "Check-in", "Hồ sơ cá nhân"][i]
+                ["Trang chủ", "Tiến độ", "Mã QR", "Cá nhân"][i]
               }
               style={[
                 styles.dockCircle,
@@ -364,6 +365,7 @@ function MetaballBottomDock({
 // --- ỨNG DỤNG CHÍNH ---
 
 export default function App() {
+  const [progressRequest, setProgressRequest] = useState(0);
   const [screen, setScreen] = useState<ScreenId>("00_LOGIN");
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(DEFAULT_API_BASE_URL);
 
@@ -464,11 +466,8 @@ export default function App() {
     if (tabIdx === 0) {
       setScreen("01_HOME");
     } else if (tabIdx === 1) {
-      if (session?.membership.state === "EXPIRED") {
-        setScreen("05_EXPIRED");
-      } else {
-        setScreen("02_MY_PACKAGE");
-      }
+      setProgressRequest((v) => v + 1);
+      setScreen("01_HOME");
     } else if (tabIdx === 2) {
       setScreen("03_QR_CODE");
     } else if (tabIdx === 3) {
@@ -546,171 +545,12 @@ export default function App() {
           01 · TRANG CHỦ HỘI VIÊN
          ===================================================================== */}
         {screen === "01_HOME" && (
-          <View style={styles.darkScreenRoot}>
-            <ScrollView
-              contentContainerStyle={styles.darkScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Header Avatar + HI MINH ANH + Bell */}
-              <View style={styles.homeTopRow}>
-                <Pressable
-                  style={styles.avatarWrap}
-                  accessibilityRole="button"
-                  accessibilityLabel="Xem hồ sơ cá nhân"
-                  onPress={() => setScreen("09_PROFILE")}
-                >
-                  <Feather
-                    name="user"
-                    size={25}
-                    color={C.white}
-                    accessible={false}
-                  />
-                </Pressable>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.hiMemberTitle}>HI {firstNameUpper}</Text>
-                  <Text style={styles.hiMemberSub}>⚡ Hội viên FitHub</Text>
-                </View>
-                <Pressable
-                  style={styles.bellBtn}
-                  onPress={() => {
-                    setScreen("03_QR_CODE");
-                  }}
-                >
-                  <Text style={{ fontSize: 14 }}>🔔</Text>
-                </Pressable>
-              </View>
-
-              {/* Thẻ Hero: tự động phản ánh trạng thái gói hoặc mặc định Lime */}
-              {session?.membership.state === "EXPIRED" ? (
-                <Pressable
-                  style={[styles.heroCard166, { backgroundColor: C.coral }]}
-                  onPress={() => setScreen("05_EXPIRED")}
-                >
-                  <TopoAndAthleteDecoration
-                    imageUri={SPORTS_IMAGES.runnerCard}
-                    side="right"
-                  />
-                  <WhiteCircleBadge bigText="0" smallText="ngày" />
-                  <Text style={styles.heroCardSubLabel}>
-                    Trạng thái hội viên
-                  </Text>
-                  <Text style={styles.heroCardMainTitle}>
-                    Gói tập đã hết hạn
-                  </Text>
-                  <Text style={styles.heroCardMeta}>
-                    Gói Gym 1 tháng kết thúc ngày 05/11
-                  </Text>
-                  <View style={styles.heroPillAnchor}>
-                    <BlackMetricPill
-                      mainVal="05/11"
-                      subVal="ĐÃ KẾT THÚC"
-                      accentHex={C.coral}
-                    />
-                  </View>
-                </Pressable>
-              ) : session?.membership.state === "NONE" ? (
-                <Pressable
-                  style={[styles.heroCard166, { backgroundColor: C.lime }]}
-                  onPress={() => setScreen("03_QR_CODE")}
-                >
-                  <Text style={styles.heroCardSubLabel}>Gói tập của bạn</Text>
-                  <Text style={styles.heroCardMainTitle}>Chưa có gói tập</Text>
-                  <Text style={styles.heroCardMeta}>
-                    Liên hệ quầy lễ tân để đăng ký gói và bắt đầu tập luyện.
-                  </Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={[styles.heroCard166, { backgroundColor: C.lime }]}
-                  onPress={() => setScreen("02_MY_PACKAGE")}
-                >
-                  <TopoAndAthleteDecoration
-                    imageUri={SPORTS_IMAGES.coachHero}
-                    side="right"
-                  />
-                  <View style={styles.pctRingBadge}>
-                    <Text style={styles.pctRingText}>96%</Text>
-                  </View>
-                  <Text style={styles.heroCardSubLabel}>
-                    Gói tập đang sử dụng
-                  </Text>
-                  <Text style={styles.heroCardMainTitle}>
-                    {session?.membership.packageName || "Chưa có gói"}
-                  </Text>
-                  <Text style={styles.heroCardMeta}>
-                    {session?.membership.allowedHoursLabel || "Chưa cung cấp"}
-                  </Text>
-                  <View style={styles.heroPillAnchor}>
-                    <BlackMetricPill
-                      mainVal={`${session?.membership.daysRemaining ?? 0} NGÀY`}
-                      subVal="CÒN LẠI"
-                      accentHex={C.lime}
-                    />
-                  </View>
-                </Pressable>
-              )}
-
-              <Text style={styles.sectionTitle18}>Dịch vụ & Tiến độ</Text>
-
-              {/* Card Lavender: Thẻ vào phòng tập (Lối vào QR duy nhất) */}
-              <Pressable
-                style={[styles.card174, { backgroundColor: C.lavender }]}
-                onPress={() => {
-                  setScreen("03_QR_CODE");
-                }}
-              >
-                <TopoAndAthleteDecoration
-                  imageUri={SPORTS_IMAGES.squatFull}
-                  side="left"
-                />
-                <WhiteCircleBadge bigText="QR" smallText="vào cửa" />
-                <Text style={styles.card174Title}>Mã QR vào phòng tập</Text>
-                <View style={styles.card174RightBottom}>
-                  <View style={styles.translucentTag}>
-                    <Text style={styles.translucentTagText}>Cơ sở Quận 1</Text>
-                  </View>
-                  <Text style={styles.card174RightDesc}>
-                    {
-                      "Xuất trình mã QR tại quầy lễ tân /\nTự động làm mới mỗi 20 giây"
-                    }
-                  </Text>
-                </View>
-              </Pressable>
-
-              {/* Card Lilac: Tiến độ tập luyện (Thay thế hoàn toàn thẻ gói tập trùng lặp) */}
-              <Pressable
-                style={[styles.card174, { backgroundColor: C.lilac }]}
-                onPress={() => setScreen("09_PROFILE")}
-              >
-                <TopoAndAthleteDecoration
-                  imageUri={SPORTS_IMAGES.upperCard}
-                  side="left"
-                />
-                <WhiteCircleBadge
-                  bigText={`${session?.membership.sessionsThisMonth ?? 0}`}
-                  smallText="buổi"
-                />
-                <Text style={styles.card174Title}>Tiến độ tập luyện</Text>
-                <View style={styles.card174RightBottom}>
-                  <View style={styles.translucentTag}>
-                    <Text style={styles.translucentTagText}>
-                      Số buổi tập trong tháng
-                    </Text>
-                  </View>
-                  <Text style={styles.card174RightDesc}>
-                    {
-                      "Được cập nhật từ các lượt check-in /\nđã xác nhận tại quầy lễ tân"
-                    }
-                  </Text>
-                </View>
-              </Pressable>
-            </ScrollView>
-
-            <MetaballBottomDock
-              activeIndex={0}
-              onSelectTab={handleBottomDockSelect}
-            />
-          </View>
+          <HomePanel
+            session={session!}
+            baseUrl={apiBaseUrl}
+            progressRequest={progressRequest}
+            onNavigate={setScreen}
+          />
         )}
 
         {/* =====================================================================
