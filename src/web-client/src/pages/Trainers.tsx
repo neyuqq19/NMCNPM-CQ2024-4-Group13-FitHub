@@ -1,3 +1,4 @@
+import { AvailableSlots } from "./TrainerSchedule";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import type {
@@ -166,6 +167,7 @@ export function TrainerDetail({ owner = false }: { owner?: boolean }) {
           reload={reload}
         />
       )}
+      {data && <AvailableSlots trainerId={data.id} />}
     </>
   );
 }

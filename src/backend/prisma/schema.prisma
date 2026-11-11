@@ -110,6 +110,7 @@ model AuthEvent {
 }
 
 model MemberProfile {
+  bookedTrainerSlots WorkingSlot[]
   id            String          @id @default(uuid()) @db.Uuid
   userId        String          @unique @db.Uuid
   user          User            @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -277,6 +278,7 @@ model CheckInRecord {
 }
 
 model TrainerProfile {
+  workingSlots    WorkingSlot[]
   id              String                 @id @default(uuid()) @db.Uuid
   userId          String                 @unique @db.Uuid
   user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -302,4 +304,26 @@ model TrainerCertification {
   createdAt     DateTime       @default(now()) @db.Timestamptz(3)
 
   @@index([trainerId])
+}
+
+enum WorkingSlotStatus {
+  OPEN
+  BOOKED
+  UNAVAILABLE
+}
+
+model WorkingSlot {
+  id                String            @id @default(uuid()) @db.Uuid
+  trainerId         String            @db.Uuid
+  trainer           TrainerProfile    @relation(fields: [trainerId], references: [id], onDelete: Restrict)
+  workDate          DateTime          @db.Date
+  startTime         DateTime          @db.Timestamptz(3)
+  endTime           DateTime          @db.Timestamptz(3)
+  status            WorkingSlotStatus @default(OPEN)
+  unavailableReason String?
+  memberId          String?           @db.Uuid
+  member            MemberProfile?    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@unique([trainerId, workDate, startTime])
+  @@unique([trainerId, startTime])
 }

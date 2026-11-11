@@ -188,6 +188,28 @@ async function main() {
           },
         });
       }
+      const trainer = await tx.trainerProfile.findUniqueOrThrow({
+        where: { trainerCode: "PT001" },
+      });
+      const todayVN = new Date(Date.now() + 7 * 3600_000)
+        .toISOString()
+        .slice(0, 10);
+      for (const offset of [1, 3]) {
+        const workDate = new Date(todayVN);
+        workDate.setUTCDate(workDate.getUTCDate() + offset);
+        const date = workDate.toISOString().slice(0, 10);
+        const slots = ["08:00", "09:15", "10:30"].map((time) => {
+          const startTime = new Date(`${date}T${time}:00+07:00`);
+          return {
+            trainerId: trainer.id,
+            workDate,
+            startTime,
+            endTime: new Date(startTime.getTime() + 3600_000),
+          };
+        });
+        // Preserve existing sessions, including ones registered at a different start time.
+        await tx.workingSlot.createMany({ data: slots, skipDuplicates: true });
+      }
       for (const item of [
         {
           code: "GYM01",

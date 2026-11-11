@@ -1,4 +1,5 @@
 export * from "./constants";
+export * from "./working-slots";
 
 export type Role = "ADMIN" | "TRAINER" | "MEMBER";
 export type Platform = "WEB" | "MOBILE";
