@@ -10,6 +10,8 @@ import {
   useNavigate,
 } from "react-router-dom";
 import {
+  CalendarDays,
+  ContactRound,
   LayoutGrid,
   Users,
   ReceiptText,
@@ -21,6 +23,7 @@ import {
 } from "lucide-react";
 import { Brand, Notice, PageHeading } from "./components";
 import { AdminLogin } from "./pages/AdminLogin";
+import { TrainerDetail, TrainerList } from "./pages/Trainers";
 import { Dashboard } from "./pages/Dashboard";
 
 import { CheckInPage } from "./pages/CheckIn";
@@ -103,11 +106,20 @@ function Shell({
         </div>
         <div className="account">
           <span className="avatar" aria-hidden="true">
-            HQ
+            {user.displayName
+              .split(" ")
+              .filter(Boolean)
+              .slice(-2)
+              .map((word) => word[0])
+              .join("")}
           </span>
           <div>
             <strong>{user.displayName}</strong>
-            <small>Quản trị hệ thống · Ca Sáng</small>
+            <small>
+              {user.role === "TRAINER"
+                ? "Huấn luyện viên"
+                : "Quản trị hệ thống · Ca Sáng"}
+            </small>
           </div>
         </div>
         <button className="button logout" onClick={onLogout}>
@@ -128,25 +140,50 @@ function Shell({
         <div className="sidebar-brand">
           <Brand collapsed={collapsed} />
         </div>
-        <nav aria-label="Điều hướng quản trị" className="sidebar-nav">
-          {!collapsed && <p className="nav-label">ĐIỀU HƯỚNG QUẢN TRỊ</p>}
-          <NavLink to="/" end title={collapsed ? "Tổng quan" : undefined}>
-            <LayoutGrid size={22} />
-            {!collapsed && <span>Tổng quan</span>}
-          </NavLink>
-          {!collapsed && <p className="nav-label">NGHIỆP VỤ QUẦY LỄ TÂN</p>}
-          <NavLink to="/members" title={collapsed ? "Hội viên" : undefined}>
-            <Users size={22} />
-            {!collapsed && <span>Hội viên</span>}
-          </NavLink>
-          <NavLink to="/check-in" title={collapsed ? "Check-in" : undefined}>
-            <ScanLine size={22} />
-            {!collapsed && <span>Check-in</span>}
-          </NavLink>
-          <NavLink to="/history" title={collapsed ? "Giao dịch" : undefined}>
-            <ReceiptText size={22} />
-            {!collapsed && <span>Giao dịch</span>}
-          </NavLink>
+        <nav aria-label="Điều hướng chính" className="sidebar-nav">
+          {user.role === "ADMIN" ? (
+            <>
+              {!collapsed && <p className="nav-label">ĐIỀU HƯỚNG QUẢN TRỊ</p>}
+              <NavLink to="/" end title={collapsed ? "Tổng quan" : undefined}>
+                <LayoutGrid size={22} />
+                {!collapsed && <span>Tổng quan</span>}
+              </NavLink>
+              {!collapsed && <p className="nav-label">NGHIỆP VỤ QUẦY LỄ TÂN</p>}
+              <NavLink to="/members" title={collapsed ? "Hội viên" : undefined}>
+                <Users size={22} />
+                {!collapsed && <span>Hội viên</span>}
+              </NavLink>
+              <NavLink
+                to="/check-in"
+                title={collapsed ? "Check-in" : undefined}
+              >
+                <ScanLine size={22} />
+                {!collapsed && <span>Check-in</span>}
+              </NavLink>
+              <NavLink
+                to="/history"
+                title={collapsed ? "Giao dịch" : undefined}
+              >
+                <ReceiptText size={22} />
+                {!collapsed && <span>Giao dịch</span>}
+              </NavLink>
+              <NavLink to="/trainers" title="Huấn luyện viên">
+                <ContactRound size={22} />
+                {!collapsed && <span>Huấn luyện viên</span>}
+              </NavLink>
+            </>
+          ) : (
+            <>
+              <NavLink to="/trainers/me" title="Hồ sơ chuyên môn">
+                <ContactRound size={22} />
+                {!collapsed && <span>Hồ sơ chuyên môn</span>}
+              </NavLink>
+              <NavLink to="/trainers/schedule" title="Lịch làm việc PT">
+                <CalendarDays size={22} />
+                {!collapsed && <span>Lịch làm việc PT</span>}
+              </NavLink>
+            </>
+          )}
         </nav>
         <div className="sidebar-footer">
           <button
@@ -205,7 +242,7 @@ export function App() {
     try {
       if (sessionStorage.getItem("fithub_token")) {
         const current = await apiService.me();
-        if (current.role !== "ADMIN") {
+        if (current.role !== "ADMIN" && current.role !== "TRAINER") {
           clearSession();
         } else setUser(current);
       }
@@ -229,7 +266,7 @@ export function App() {
   }, []);
   function login(current: CurrentUser) {
     setUser(current);
-    navigate("/members");
+    navigate(current.role === "TRAINER" ? "/trainers/me" : "/members");
   }
   async function logout() {
     try {
@@ -263,7 +300,10 @@ export function App() {
           path="/login"
           element={
             user ? (
-              <Navigate to="/members" replace />
+              <Navigate
+                to={user.role === "TRAINER" ? "/trainers/me" : "/members"}
+                replace
+              />
             ) : (
               <AdminLogin onLogin={login} />
             )
@@ -278,17 +318,41 @@ export function App() {
             )
           }
         >
-          <Route index element={<Home user={user!} />} />
-          <Route path="check-in" element={<CheckInPage />} />
-          <Route path="members" element={<MemberList />} />
-          <Route path="members/new" element={<MemberForm />} />
-          <Route path="members/:id" element={<MemberDetail />} />
-          <Route path="members/:id/edit" element={<MemberForm />} />
-          <Route path="members/:id/package" element={<PackagePage />} />
-          <Route path="members/:id/payment" element={<PackagePage />} />
-          <Route path="payments/:paymentId" element={<PaymentPage />} />
-          <Route path="payments/:paymentId/success" element={<SuccessPage />} />
-          <Route path="history" element={<HistoryPage />} />
+          {user?.role === "TRAINER" ? (
+            <>
+              <Route index element={<Navigate to="/trainers/me" replace />} />
+              <Route path="trainers/me" element={<TrainerDetail owner />} />
+              <Route
+                path="trainers/schedule"
+                element={
+                  <PageHeading
+                    section="Huấn luyện viên"
+                    title="Lịch làm việc PT"
+                    description="Chức năng quản lý lịch làm việc chưa được triển khai."
+                  />
+                }
+              />
+            </>
+          ) : (
+            <>
+              <Route index element={<Home user={user!} />} />
+              <Route path="check-in" element={<CheckInPage />} />
+              <Route path="members" element={<MemberList />} />
+              <Route path="members/new" element={<MemberForm />} />
+              <Route path="members/:id" element={<MemberDetail />} />
+              <Route path="members/:id/edit" element={<MemberForm />} />
+              <Route path="members/:id/package" element={<PackagePage />} />
+              <Route path="members/:id/payment" element={<PackagePage />} />
+              <Route path="payments/:paymentId" element={<PaymentPage />} />
+              <Route
+                path="payments/:paymentId/success"
+                element={<SuccessPage />}
+              />
+              <Route path="history" element={<HistoryPage />} />
+            </>
+          )}
+          <Route path="trainers" element={<TrainerList />} />
+          <Route path="trainers/:id" element={<TrainerDetail />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

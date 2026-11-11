@@ -6,9 +6,10 @@ import { MembersModule } from './modules/members/members.module';
 import { PackagesModule } from './modules/packages/packages.module';
 import { CheckInsModule } from './modules/check-ins/check-ins.module';
 import { SalesModule } from './modules/sales/sales.module';
+import { TrainersModule } from './modules/trainers/trainers.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, MembersModule, PackagesModule, CheckInsModule, SalesModule],
+  imports: [DatabaseModule, AuthModule, MembersModule, PackagesModule, CheckInsModule, SalesModule, TrainersModule],
   controllers: [AppController],
 })
 export class AppModule {}

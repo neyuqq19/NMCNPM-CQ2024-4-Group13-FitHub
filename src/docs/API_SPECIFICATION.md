@@ -110,3 +110,18 @@ Ngừng sử dụng ghi lý do tối đa 1000 ký tự trong AuditLog, chuyển 
 `GET /api/members/overview` yêu cầu ADMIN, trả `{ total, active, pendingVerification, unavailable }`. Số đếm tính trên tất cả hồ sơ hội viên, độc lập `q/status/page` của danh sách; `unavailable` là tổng tài khoản LOCKED và DEACTIVATED. Không đếm tài khoản MEMBER chưa có hồ sơ.
 
 `MemberDetailDto` bổ sung `createdAt` (ngày tạo hồ sơ ISO) và `totalSpent` (tổng Payment.amount có trạng thái CONFIRMED của hội viên). Chưa thanh toán/hủy không góp vào số tiền; giá danh mục hiện tại không sửa ngược tổng tiền đã thu. Dữ liệu gói và hồ sơ hiện có được giữ lại khi đổi bố cục.
+
+### UC06 — Hồ sơ chuyên môn PT
+
+Các endpoint dưới đây yêu cầu phiên đăng nhập. UC08 dùng `id` của hồ sơ trong danh sách làm định danh PT.
+
+| Phương thức | Đường dẫn | Dữ liệu |
+| --- | --- | --- |
+| GET | `/api/trainers` | Trả `{ items: TrainerSummaryDto[] }` cho Admin, PT và hội viên. Có thể kết hợp `q` (tên) và `specialty` (chuyên môn). Chỉ gồm PT đang ACTIVE có hồ sơ hoàn chỉnh. |
+| GET | `/api/trainers/:id` | Chi tiết PT, gồm tiểu sử, danh sách chứng chỉ và phiên bản. |
+| GET | `/api/trainers/me` | Hồ sơ của PT đang đăng nhập, kể cả khi chưa điền thông tin lần đầu. |
+| PUT | `/api/trainers/me/profile` | Gửi `version`, `bio`, `specialties`, `experienceYears` và tùy chọn `avatarUrl`. |
+| POST | `/api/trainers/me/certifications` | Gửi `version`, `name`, `issuer`, `issuedAt` dạng YYYY-MM-DD và tùy chọn `credentialUrl` (mã hoặc đường dẫn). |
+| DELETE | `/api/trainers/me/certifications/:certId` | Gửi `{ "version": n }` trong JSON body. |
+
+Ba thao tác ghi chỉ dành cho chính PT. Mỗi lần lưu thành công trả về toàn bộ hồ sơ với phiên bản mới. Khi gặp `409 VERSION_CONFLICT`, tải lại hồ sơ trước khi lưu tiếp. API trả `403 NOT_PROFILE_OWNER` cho người sửa sai quyền và `400` kèm `fieldErrors` khi dữ liệu không hợp lệ.
