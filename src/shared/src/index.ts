@@ -355,3 +355,104 @@ export interface MyMembershipDetailDto {
     price: number;
   })[];
 }
+
+export type EquipmentCategory =
+  | "CARDIO"
+  | "STRENGTH"
+  | "FREE_WEIGHT"
+  | "FUNCTIONAL";
+
+export type EquipmentStatus = "OPERATIONAL" | "OUT_OF_ORDER" | "RETIRED";
+
+export type IncidentSeverity = "LOW" | "MEDIUM" | "HIGH";
+
+export type IncidentStatus = "OPEN" | "RESOLVED" | "REJECTED";
+
+export interface EquipmentIncidentDto {
+  id: string;
+  equipmentId: string;
+  description: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  resolutionNote: string | null;
+  reportedBy: string | null;
+  resolvedBy: string | null;
+  reportedAt: string;
+  resolvedAt: string | null;
+}
+
+export interface EquipmentHistoryDto {
+  id: string;
+  equipmentId: string;
+  action: string;
+  fromStatus: EquipmentStatus | null;
+  toStatus: EquipmentStatus;
+  note: string | null;
+  actorName: string | null;
+  createdAt: string;
+}
+
+export interface EquipmentDto {
+  id: string;
+  code: string;
+  name: string;
+  category: EquipmentCategory;
+  zone: string;
+  status: EquipmentStatus;
+  qrCodePayload: string;
+  purchasedAt: string | null;
+  warrantyUntil: string | null;
+  notes: string | null;
+  openIncident: EquipmentIncidentDto | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EquipmentOverviewDto {
+  total: number;
+  operational: number;
+  outOfOrder: number;
+  retired: number;
+}
+
+export interface EquipmentPageDto {
+  items: EquipmentDto[];
+  overview: EquipmentOverviewDto;
+  zones: string[];
+}
+
+export interface EquipmentDetailDto extends EquipmentDto {
+  incidents: EquipmentIncidentDto[];
+  history: EquipmentHistoryDto[];
+}
+
+export interface CreateEquipmentRequest {
+  name: string;
+  category: EquipmentCategory;
+  zone: string;
+  purchasedAt?: string | null;
+  warrantyUntil?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateEquipmentRequest {
+  name?: string;
+  zone?: string;
+  purchasedAt?: string | null;
+  warrantyUntil?: string | null;
+  notes?: string | null;
+}
+
+export interface CreateIncidentRequest {
+  description: string;
+  severity?: IncidentSeverity;
+}
+
+export interface ResolveMaintenanceRequest {
+  resolutionNote: string;
+  nextStatus?: "OPERATIONAL" | "RETIRED";
+}
+
+export interface RetireEquipmentRequest {
+  reason?: string | null;
+}

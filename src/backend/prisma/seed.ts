@@ -234,6 +234,138 @@ async function main() {
           },
         });
       }
+
+      const equipmentSamples = [
+        {
+          code: "EQ-CARDIO-001",
+          name: "Máy chạy bộ Technogym Excite",
+          category: "CARDIO" as const,
+          zone: "Tầng 1 - Khu Cardio",
+          status: "OPERATIONAL" as const,
+          purchasedAt: "2026-01-15",
+          warrantyUntil: "2028-01-15",
+          notes: "Bảo dưỡng định kỳ hàng quý.",
+        },
+        {
+          code: "EQ-CARDIO-002",
+          name: "Xe đạp tập trượt tuyết Elliptical",
+          category: "CARDIO" as const,
+          zone: "Tầng 1 - Khu Cardio",
+          status: "OUT_OF_ORDER" as const,
+          purchasedAt: "2026-01-15",
+          warrantyUntil: "2028-01-15",
+          notes: "Đang chờ thay dây curoa chính hãng.",
+          openIncident: {
+            description: "Đứt dây curoa truyền động, phát tiếng kêu lớn khi đạp",
+            severity: "HIGH" as const,
+          },
+        },
+        {
+          code: "EQ-STRENGTH-001",
+          name: "Giàn tạ đa năng Smith Machine",
+          category: "STRENGTH" as const,
+          zone: "Tầng 2 - Khu Máy khối",
+          status: "OPERATIONAL" as const,
+          purchasedAt: "2026-02-10",
+          warrantyUntil: "2029-02-10",
+          notes: "Kiểm tra cáp và khóa an toàn mỗi tuần.",
+        },
+        {
+          code: "EQ-STRENGTH-002",
+          name: "Máy ép ngực Chest Press",
+          category: "STRENGTH" as const,
+          zone: "Tầng 2 - Khu Máy khối",
+          status: "OPERATIONAL" as const,
+          purchasedAt: "2026-02-10",
+          warrantyUntil: "2029-02-10",
+          notes: null,
+        },
+        {
+          code: "EQ-FREE_WEIGHT-001",
+          name: "Ghế đẩy tạ đòn Olympic Bench",
+          category: "FREE_WEIGHT" as const,
+          zone: "Tầng 2 - Khu Tạ rời",
+          status: "RETIRED" as const,
+          purchasedAt: "2024-05-01",
+          warrantyUntil: "2026-05-01",
+          notes: "Đã thanh lý do nứt khung chịu lực chính.",
+        },
+        {
+          code: "EQ-FUNCTIONAL-001",
+          name: "Khung tập đa năng Cable Crossover",
+          category: "FUNCTIONAL" as const,
+          zone: "Tầng 3 - Khu Functional",
+          status: "OPERATIONAL" as const,
+          purchasedAt: "2026-03-20",
+          warrantyUntil: "2028-03-20",
+          notes: null,
+        },
+      ];
+
+      for (const item of equipmentSamples) {
+        const existing = await tx.equipment.findUnique({
+          where: { code: item.code },
+        });
+        if (existing) continue;
+
+        const eq = await tx.equipment.create({
+          data: {
+            code: item.code,
+            name: item.name,
+            category: item.category,
+            zone: item.zone,
+            status: item.status,
+            qrCodePayload: `FITHUB://EQUIPMENT/${item.code}`,
+            purchasedAt: new Date(`${item.purchasedAt}T00:00:00Z`),
+            warrantyUntil: new Date(`${item.warrantyUntil}T00:00:00Z`),
+            notes: item.notes,
+          },
+        });
+
+        await tx.equipmentHistory.create({
+          data: {
+            equipmentId: eq.id,
+            actorId: admin.id,
+            action: "CREATED",
+            fromStatus: null,
+            toStatus: "OPERATIONAL",
+            note: "Nhập thiết bị mới vào hệ thống (Seed)",
+          },
+        });
+
+        if (item.openIncident) {
+          await tx.equipmentIncident.create({
+            data: {
+              equipmentId: eq.id,
+              reportedById: admin.id,
+              description: item.openIncident.description,
+              severity: item.openIncident.severity,
+              status: "OPEN",
+            },
+          });
+          await tx.equipmentHistory.create({
+            data: {
+              equipmentId: eq.id,
+              actorId: admin.id,
+              action: "INCIDENT_REPORTED",
+              fromStatus: "OPERATIONAL",
+              toStatus: "OUT_OF_ORDER",
+              note: item.openIncident.description,
+            },
+          });
+        } else if (item.status === "RETIRED") {
+          await tx.equipmentHistory.create({
+            data: {
+              equipmentId: eq.id,
+              actorId: admin.id,
+              action: "RETIRED",
+              fromStatus: "OPERATIONAL",
+              toStatus: "RETIRED",
+              note: item.notes || "Thanh lý thiết bị ngưng sử dụng",
+            },
+          });
+        }
+      }
     },
     { timeout: 15000 },
   );
@@ -246,6 +378,7 @@ async function main() {
     packages: await db.package.count(),
     memberships: await db.membership.count(),
     payments: await db.payment.count(),
+    equipments: await db.equipment.count(),
   });
 }
 main()

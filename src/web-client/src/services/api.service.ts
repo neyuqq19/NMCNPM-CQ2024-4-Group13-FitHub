@@ -1,8 +1,12 @@
 import type {
   ApiErrorBody,
+  CreateEquipmentRequest,
+  CreateIncidentRequest,
   CreateMemberRequest,
   CreatePackageRequest,
   CurrentUser,
+  EquipmentDetailDto,
+  EquipmentPageDto,
   FreezeMembershipRequest,
   FreezeMembershipResponse,
   FreezePeriodDto,
@@ -12,6 +16,9 @@ import type {
   MemberPage,
   MemberOverviewDto,
   PackageDto,
+  ResolveMaintenanceRequest,
+  RetireEquipmentRequest,
+  UpdateEquipmentRequest,
   UpdateMemberRequest,
   UpdatePackageRequest,
 } from "@fithub/contracts";
@@ -113,5 +120,39 @@ export const apiService = {
     }),
   getMembershipFreezes: (id: string) =>
     fetchFromApi<FreezePeriodDto[]>(`/api/memberships/${id}/freezes`),
+  getEquipments: (query = "") =>
+    fetchFromApi<EquipmentPageDto>(
+      `/api/equipments${query ? `?${query}` : ""}`,
+    ),
+  getEquipment: (id: string) =>
+    fetchFromApi<EquipmentDetailDto>(`/api/equipments/${id}`),
+  createEquipment: (body: CreateEquipmentRequest) =>
+    fetchFromApi<EquipmentDetailDto>("/api/equipments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateEquipment: (id: string, body: UpdateEquipmentRequest) =>
+    fetchFromApi<EquipmentDetailDto>(`/api/equipments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  reportEquipmentIncident: (id: string, body: CreateIncidentRequest) =>
+    fetchFromApi<EquipmentDetailDto>(`/api/equipments/${id}/incidents`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  resolveEquipmentMaintenance: (id: string, body: ResolveMaintenanceRequest) =>
+    fetchFromApi<EquipmentDetailDto>(
+      `/api/equipments/${id}/resolve-maintenance`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+  retireEquipment: (id: string, body: RetireEquipmentRequest = {}) =>
+    fetchFromApi<EquipmentDetailDto>(`/api/equipments/${id}/retire`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   getHealth: () => fetchFromApi("/api/health"),
 };
