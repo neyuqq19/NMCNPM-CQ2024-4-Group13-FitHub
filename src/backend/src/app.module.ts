@@ -1,3 +1,4 @@
+import { WorkoutsModule } from "./modules/workouts/workouts.module";
 import { Module } from "@nestjs/common";
 import { AppController } from "./app.controller";
 import { DatabaseModule } from "./database/database.module";
@@ -21,6 +22,7 @@ import { EquipmentsModule } from "./modules/equipments/equipments.module";
     MembershipsModule,
     TrainersModule,
     EquipmentsModule,
+    WorkoutsModule,
   ],
   controllers: [AppController],
 })

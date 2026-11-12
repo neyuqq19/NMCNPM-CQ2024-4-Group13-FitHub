@@ -1,5 +1,11 @@
 import "dotenv/config";
-import { PrismaClient, type AccountStatus, type Role } from "@prisma/client";
+import {
+  PrismaClient,
+  type AccountStatus,
+  type Prisma,
+  type Role,
+} from "@prisma/client";
+import { calculateEpley1RM, type WorkoutSetType } from "@fithub/contracts";
 import { hashPassword } from "../src/modules/auth/password";
 
 const seedDatabaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
@@ -342,7 +348,8 @@ async function main() {
           warrantyUntil: "2028-01-15",
           notes: "Đang chờ thay dây curoa chính hãng.",
           openIncident: {
-            description: "Đứt dây curoa truyền động, phát tiếng kêu lớn khi đạp",
+            description:
+              "Đứt dây curoa truyền động, phát tiếng kêu lớn khi đạp",
             severity: "HIGH" as const,
           },
         },
@@ -452,6 +459,7 @@ async function main() {
           });
         }
       }
+      await seedWorkouts(tx);
     },
     { timeout: 15000 },
   );
@@ -465,6 +473,8 @@ async function main() {
     memberships: await db.membership.count(),
     payments: await db.payment.count(),
     equipments: await db.equipment.count(),
+    workoutSessions: await db.workoutSession.count(),
+    personalRecords: await db.personalRecord.count(),
   });
 }
 main()
@@ -473,3 +483,109 @@ main()
     process.exitCode = 1;
   })
   .finally(() => db.$disconnect());
+
+// ===== UC13 — Nhật ký tập luyện: dữ liệu mẫu cho HV001 =====
+// Two sessions in 11/2026 and baseline records for Bench Press (80kg x 5 -> 93.33kg)
+// and Deadlift. Logging Bench Press 85kg x 5 (99.17kg) afterwards shows a new PR.
+async function seedWorkouts(tx: Prisma.TransactionClient) {
+  const member = await tx.memberProfile.findUniqueOrThrow({
+    where: { memberCode: "HV001" },
+  });
+  if (await tx.workoutSession.count({ where: { memberId: member.id } })) return;
+  const sessions: {
+    title: string;
+    performedOn: string;
+    durationMinutes: number;
+    exercises: { name: string; sets: [WorkoutSetType, number, number][] }[];
+  }[] = [
+    {
+      title: "Push Day - Ngực & Tay sau",
+      performedOn: "2026-11-03",
+      durationMinutes: 60,
+      exercises: [
+        {
+          name: "Bench Press",
+          sets: [
+            ["W", 10, 40],
+            ["R", 5, 80],
+            ["R", 6, 75],
+          ],
+        },
+        {
+          name: "Push-up",
+          sets: [
+            ["R", 15, 0],
+            ["F", 12, 0],
+          ],
+        },
+      ],
+    },
+    {
+      title: "Pull Day - Lưng & Đùi sau",
+      performedOn: "2026-11-05",
+      durationMinutes: 55,
+      exercises: [
+        {
+          name: "Deadlift",
+          sets: [
+            ["W", 8, 60],
+            ["R", 5, 120],
+            ["D", 8, 90],
+          ],
+        },
+        { name: "Pull-up", sets: [["R", 8, 0]] },
+      ],
+    },
+  ];
+  for (const s of sessions) {
+    const performedOn = new Date(`${s.performedOn}T00:00:00Z`);
+    const created = await tx.workoutSession.create({
+      data: {
+        memberId: member.id,
+        title: s.title,
+        performedOn,
+        durationMinutes: s.durationMinutes,
+        totalVolume: s.exercises
+          .flatMap((e) => e.sets)
+          .reduce((n, [, reps, kg]) => n + reps * kg, 0),
+        exercises: {
+          create: s.exercises.map((e, i) => ({
+            exerciseName: e.name,
+            exerciseKey: e.name.toLowerCase(),
+            orderIndex: i,
+            sets: {
+              create: e.sets.map(([setType, reps, weightKg], j) => ({
+                setNumber: j + 1,
+                setType,
+                reps,
+                weightKg,
+                estimated1RM: calculateEpley1RM(setType, weightKg, reps),
+              })),
+            },
+          })),
+        },
+      },
+      include: { exercises: { include: { sets: true } } },
+    });
+    // First session of each lifted exercise becomes its baseline (isPR = false).
+    for (const exercise of created.exercises) {
+      const best = exercise.sets
+        .filter((x) => x.estimated1RM !== null)
+        .sort((a, b) => Number(b.estimated1RM) - Number(a.estimated1RM))[0];
+      if (!best) continue;
+      await tx.personalRecord.create({
+        data: {
+          memberId: member.id,
+          exerciseName: exercise.exerciseName,
+          exerciseKey: exercise.exerciseKey,
+          oneRepMax: best.estimated1RM!,
+          weightKg: best.weightKg,
+          reps: best.reps,
+          achievedOn: performedOn,
+          setId: best.id,
+          isBaseline: true,
+        },
+      });
+    }
+  }
+}

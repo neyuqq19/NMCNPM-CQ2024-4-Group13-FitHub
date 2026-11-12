@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MyCheckInSummaryDto } from "@fithub/contracts";
 import type { MobileSession, MyMembershipSummary, ScreenId } from "./types";
 import { getMyCheckInSummary, refreshMyMembership } from "./api";
+import { WorkoutSummaryCard } from "./WorkoutLogPanel";
 const lime = "#DFFF63";
 const states: Record<string, string> = {
   NONE: "Chưa có gói",
@@ -254,6 +255,12 @@ export function HomePanel({
               </>
             )}
           </View>
+          {/* UC13: mở Nhật ký tập luyện */}
+          <WorkoutSummaryCard
+            baseUrl={baseUrl}
+            session={session}
+            onOpen={() => onNavigate("10_WORKOUT_LOG")}
+          />
         </View>
       </ScrollView>
       <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, 10) }]}>

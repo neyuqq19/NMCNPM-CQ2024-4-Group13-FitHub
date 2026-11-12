@@ -21,6 +21,7 @@ import {
   MobileApiError,
   freezeMyMembership,
   getMyCheckInSummary,
+  getMyWorkouts,
   getMyMembershipDetail,
   logoutMobile,
   restoreMobileSession,
@@ -35,6 +36,7 @@ import { clearSession, loadSession, saveSession } from "./src/session";
 import { HomePanel } from "./src/HomePanel";
 import { PtBookingPanel } from "./src/PtBookingPanel";
 import { CheckInPanel } from "./src/CheckInPanel";
+import { WorkoutLogPanel } from "./src/WorkoutLogPanel";
 import { AuthPanel } from "./src/AuthPanel";
 import { SPORTS_IMAGES } from "./src/sportsImages";
 import { C } from "./src/theme";
@@ -404,12 +406,23 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (
-      session &&
-      (screen === "02_MY_PACKAGE" || screen === "05_EXPIRED")
-    ) {
+    if (session && (screen === "02_MY_PACKAGE" || screen === "05_EXPIRED")) {
       void loadMyPackageData(session);
     }
+  }, [screen, session?.accessToken, apiBaseUrl]);
+  // UC13: số buổi tập thật trong tháng cho màn 02_MY_PACKAGE.
+  const [workoutsThisMonth, setWorkoutsThisMonth] = useState<number | null>(
+    null,
+  );
+  useEffect(() => {
+    if (screen !== "02_MY_PACKAGE" || !session) return;
+    let live = true;
+    getMyWorkouts(apiBaseUrl, session, { pageSize: 1 })
+      .then((r) => live && setWorkoutsThisMonth(r.stats.sessionsThisMonth))
+      .catch(() => live && setWorkoutsThisMonth(null));
+    return () => {
+      live = false;
+    };
   }, [screen, session?.accessToken, apiBaseUrl]);
   async function restore() {
     setInitializing(true);
@@ -624,10 +637,7 @@ export default function App() {
               year: "numeric",
               timeZone: "Asia/Ho_Chi_Minh",
             }).format(new Date());
-            const sessionsMonth =
-              checkInSummary?.sessionsThisMonth ??
-              summaryPkg?.sessionsThisMonth ??
-              0;
+            const sessionsMonth = workoutsThisMonth ?? "–";
             const ptRem = detailPkg?.ptSessionsRemaining ?? 0;
             const ptSnap = detailPkg?.ptSessionsSnapshot ?? 0;
             const frozenUsed = detailPkg?.frozenDaysUsed ?? 0;
@@ -720,7 +730,10 @@ export default function App() {
 
                   {/* 2 Mini Cards */}
                   <View style={styles.twoColGrid}>
-                    <View
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Mở nhật ký tập luyện"
+                      onPress={() => setScreen("10_WORKOUT_LOG")}
                       style={[styles.miniCard144, { backgroundColor: C.lilac }]}
                     >
                       <TopoAndAthleteDecoration side="right" />
@@ -731,7 +744,7 @@ export default function App() {
                           ? `Còn ${ptRem}/${ptSnap} buổi PT`
                           : "Buổi trong tháng"}
                       </Text>
-                    </View>
+                    </Pressable>
 
                     <View
                       style={[
@@ -935,7 +948,11 @@ export default function App() {
             const endShort = summaryPkg?.endsInclusive
               ? summaryPkg.endsInclusive.slice(0, 5)
               : detailPkg?.endsBefore
-                ? detailPkg.endsBefore.slice(5, 10).split("-").reverse().join("/")
+                ? detailPkg.endsBefore
+                    .slice(5, 10)
+                    .split("-")
+                    .reverse()
+                    .join("/")
                 : "—";
             const currentStatus = detailPkg?.status || summaryPkg?.state;
             const pkgName =
@@ -1051,6 +1068,16 @@ export default function App() {
         {/* =====================================================================
           09 · HỒ SƠ HỘI VIÊN (USER PROFILE)
          ===================================================================== */}
+        {screen === "10_WORKOUT_LOG" && session && (
+          <View style={styles.darkScreenRoot}>
+            <WorkoutLogPanel
+              baseUrl={apiBaseUrl}
+              session={session}
+              onBack={() => setScreen("01_HOME")}
+            />
+          </View>
+        )}
+
         {screen === "09_PROFILE" && (
           <View style={styles.darkScreenRoot}>
             <ScrollView

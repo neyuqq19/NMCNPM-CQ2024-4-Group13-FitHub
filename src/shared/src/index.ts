@@ -410,10 +410,7 @@ export interface MyMembershipDetailDto {
 }
 
 export type EquipmentCategory =
-  | "CARDIO"
-  | "STRENGTH"
-  | "FREE_WEIGHT"
-  | "FUNCTIONAL";
+  "CARDIO" | "STRENGTH" | "FREE_WEIGHT" | "FUNCTIONAL";
 
 export type EquipmentStatus = "OPERATIONAL" | "OUT_OF_ORDER" | "RETIRED";
 
@@ -508,4 +505,117 @@ export interface ResolveMaintenanceRequest {
 
 export interface RetireEquipmentRequest {
   reason?: string | null;
+}
+
+// ===== UC13 — Nhật ký tập luyện (SAD 4.9, UCSpec 3.4.4) =====
+
+/** W = khởi động, R = hiệp chính, D = drop set, F = tới ngưỡng thất bại. */
+export type WorkoutSetType = "W" | "R" | "D" | "F";
+export const WORKOUT_SET_TYPES: readonly WorkoutSetType[] = [
+  "W",
+  "R",
+  "D",
+  "F",
+];
+export const WORKOUT_LIMITS = {
+  repsMax: 500,
+  weightKgMax: 1000,
+  exercisesMax: 30,
+  setsPerExerciseMax: 50,
+  titleMax: 120,
+  exerciseNameMax: 80,
+  notesMax: 1000,
+  durationMinutesMax: 600,
+} as const;
+
+/**
+ * BR02/BR03 — Epley 1RM. Only working sets (R) with external load count;
+ * W, D, F and bodyweight sets return null so they never affect records.
+ */
+export function calculateEpley1RM(
+  setType: WorkoutSetType,
+  weightKg: number,
+  reps: number,
+): number | null {
+  if (setType !== "R" || !(weightKg > 0) || !(reps >= 1)) return null;
+  if (reps === 1) return weightKg;
+  return Math.round(weightKg * (1 + reps / 30) * 100) / 100;
+}
+
+export interface WorkoutSetInput {
+  setType: WorkoutSetType;
+  reps: number;
+  weightKg: number;
+}
+export interface WorkoutExerciseInput {
+  exerciseName: string;
+  sets: WorkoutSetInput[];
+}
+export interface CreateWorkoutSessionRequest {
+  title: string;
+  /** YYYY-MM-DD, local gym date; not in the future. */
+  performedOn: string;
+  durationMinutes?: number | null;
+  notes?: string | null;
+  exercises: WorkoutExerciseInput[];
+}
+export type UpdateWorkoutSessionRequest = CreateWorkoutSessionRequest;
+
+export interface WorkoutSetDto {
+  id: string;
+  setNumber: number;
+  setType: WorkoutSetType;
+  reps: number;
+  weightKg: number;
+  volume: number;
+  estimated1RM: number | null;
+  isPR: boolean;
+}
+export interface WorkoutExerciseDto {
+  id: string;
+  exerciseName: string;
+  orderIndex: number;
+  sets: WorkoutSetDto[];
+}
+export interface WorkoutSessionDto {
+  id: string;
+  title: string;
+  performedOn: string;
+  durationMinutes: number | null;
+  notes: string | null;
+  totalVolume: number;
+  createdAt: string;
+  updatedAt: string;
+  exercises: WorkoutExerciseDto[];
+  /** Records this session currently holds as a new PR (isPR = true). */
+  newRecords: { exerciseName: string; oneRepMax: number }[];
+}
+export interface WorkoutMonthStatsDto {
+  /** YYYY-MM in Asia/Ho_Chi_Minh. */
+  month: string;
+  sessionsThisMonth: number;
+  totalMinutesThisMonth: number;
+  totalVolumeThisMonth: number;
+  /** Consecutive training days ending today (or yesterday). */
+  currentStreakDays: number;
+}
+export interface WorkoutHistoryResponse {
+  items: WorkoutSessionDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+  stats: WorkoutMonthStatsDto;
+}
+export interface PersonalRecordDto {
+  exerciseName: string;
+  oneRepMax: number;
+  weightKg: number;
+  reps: number;
+  achievedOn: string;
+  sessionId: string | null;
+  /** BR04: first-ever best for the exercise, not yet beaten. */
+  isBaseline: boolean;
+  /** True once a later session beat the baseline. */
+  isPR: boolean;
+  updatedAt: string;
 }
