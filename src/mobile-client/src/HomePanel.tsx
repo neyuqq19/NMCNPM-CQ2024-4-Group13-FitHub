@@ -13,7 +13,11 @@ import Feather from "@expo/vector-icons/Feather";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MyCheckInSummaryDto } from "@fithub/contracts";
 import type { MobileSession, MyMembershipSummary, ScreenId } from "./types";
-import { getMyCheckInSummary, refreshMyMembership } from "./api";
+import {
+  getMyCheckInSummary,
+  getMyNotifications,
+  refreshMyMembership,
+} from "./api";
 const lime = "#DFFF63";
 const states: Record<string, string> = {
   NONE: "Chưa có gói",
@@ -43,6 +47,8 @@ export function HomePanel({
     null,
   );
   const [summary, setSummary] = useState<MyCheckInSummaryDto | null>(null);
+  // UC16: unread count shown as a badge on the bell. A failure just hides the badge.
+  const [unread, setUnread] = useState(0);
   const [errors, setErrors] = useState({ membership: "", progress: "" });
   const [loading, setLoading] = useState(true);
   const generation = useRef(0);
@@ -61,6 +67,13 @@ export function HomePanel({
               ...v,
               membership: e.message || "Không tải được gói tập.",
             }));
+        }),
+      getMyNotifications(baseUrl, session, { pageSize: 1 })
+        .then((v) => {
+          if (generation.current === id) setUnread(v.unreadCount);
+        })
+        .catch(() => {
+          if (generation.current === id) setUnread(0);
         }),
       getMyCheckInSummary(baseUrl, session)
         .then((v) => {
@@ -132,6 +145,21 @@ export function HomePanel({
             <Text style={s.greeting}>XIN CHÀO,</Text>
             <Text style={s.name}>{session.user.displayName}</Text>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              unread > 0 ? `Thông báo, ${unread} chưa đọc` : "Thông báo"
+            }
+            style={s.bell}
+            onPress={() => onNavigate("11_NOTIFICATIONS")}
+          >
+            <Feather name="bell" size={24} color="white" />
+            {unread > 0 ? (
+              <View style={s.bellBadge} testID="notification-badge">
+                <Text style={s.bellBadgeText}>{unread > 9 ? "9+" : unread}</Text>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
         <Pressable
           style={[s.card, { backgroundColor: lime }]}
@@ -305,6 +333,27 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  bell: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#242429",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    backgroundColor: "#FF4D5E",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellBadgeText: { color: "white", fontSize: 11, fontWeight: "800" },
   greeting: { color: "#AAA9B2", fontSize: 13 },
   name: { color: "white", fontSize: 23, fontWeight: "800", marginTop: 4 },
   card: { borderRadius: 25, padding: 20, gap: 12 },

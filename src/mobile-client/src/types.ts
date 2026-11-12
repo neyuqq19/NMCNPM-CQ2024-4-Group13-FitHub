@@ -66,4 +66,5 @@ export type ScreenId =
   | "06_COOLDOWN"
   | "07_QR_EXPIRED"
   | "08_VERIFYING"
-  | "09_PROFILE";
+  | "09_PROFILE"
+  | "11_NOTIFICATIONS";

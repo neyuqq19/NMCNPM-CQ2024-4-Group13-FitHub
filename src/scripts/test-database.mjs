@@ -29,6 +29,8 @@ for (const args of [
     "test/auth-registration.test.ts",
     "test/check-ins.test.ts",
     "test/sales.test.ts",
+    "test/notifications-rules.test.ts",
+    "test/notifications.test.ts",
   ],
 ]) {
   const result = spawnSync(process.execPath, args, {
