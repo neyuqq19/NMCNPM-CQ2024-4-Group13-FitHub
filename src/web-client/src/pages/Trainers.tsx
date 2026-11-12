@@ -239,6 +239,8 @@ function TrainerProfileForm({
         bio: String(fields.get("bio")).trim(),
         specialties: specialties.map((s) => s.trim()).filter(Boolean),
         experienceYears: Number(years),
+        workStatus:
+          fields.get("workStatus") === "ON_LEAVE" ? "ON_LEAVE" : "ACTIVE",
         avatarUrl: String(fields.get("avatarUrl")).trim() || null,
         version: profile.version,
       },
@@ -326,6 +328,13 @@ function TrainerProfileForm({
               </fieldset>
               <div className="form-grid">
                 <label className="field">
+                  Trạng thái làm việc
+                  <select name="workStatus" defaultValue={initial.workStatus}>
+                    <option value="ACTIVE">Đang làm việc</option>
+                    <option value="ON_LEAVE">Đang nghỉ phép</option>
+                  </select>
+                </label>
+                <label className="field">
                   Số năm kinh nghiệm
                   <input
                     type="number"
@@ -349,6 +358,7 @@ function TrainerProfileForm({
             <p className="trainer-bio">{profile.bio}</p>
             <Specialties values={profile.specialties} />
             <p>{profile.experienceYears} năm kinh nghiệm</p>
+            {profile.workStatus === "ON_LEAVE" && <p>PT đang nghỉ phép.</p>}
           </>
         )}
       </section>

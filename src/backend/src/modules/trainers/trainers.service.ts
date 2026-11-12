@@ -49,6 +49,7 @@ function summary(p: Summary): TrainerSummaryDto {
     email: p.user.email,
     phone: p.user.phone,
     accountStatus: p.user.status,
+    workStatus: p.workStatus,
     avatarUrl: p.avatarUrl,
     specialties: p.specialties,
     experienceYears: p.experienceYears,

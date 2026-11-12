@@ -204,7 +204,10 @@ export class WorkingSlotsService {
     const rows = await this.db.workingSlot.findMany({
       where: {
         trainerId,
-        trainer: { user: { status: "ACTIVE", role: "TRAINER" } },
+        trainer: {
+          workStatus: "ACTIVE",
+          user: { status: "ACTIVE", role: "TRAINER" },
+        },
         workDate: localDate(date),
         status: "OPEN",
         startTime: { gt: this.now() },

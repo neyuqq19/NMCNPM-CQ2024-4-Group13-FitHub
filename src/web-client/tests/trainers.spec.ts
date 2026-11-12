@@ -61,6 +61,7 @@ test("UC06: trainer edits and validates their profile, admin browses the persist
     }
 
     await years.fill("7");
+    await page.getByLabel("Trạng thái làm việc").selectOption("ON_LEAVE");
     await page.getByRole("button", { name: "Thêm chuyên môn" }).click();
     await page
       .getByLabel(`Chuyên môn ${original.specialties.length + 1}`, {
@@ -87,6 +88,7 @@ test("UC06: trainer edits and validates their profile, admin browses the persist
     await expect(page.getByText(credentials, { exact: true })).toBeVisible();
     await page.reload();
     await expect(bioField).toHaveValue(bio);
+    await expect(page.getByLabel("Trạng thái làm việc")).toHaveValue("ON_LEAVE");
     await expect(page.getByText(credentials, { exact: true })).toBeVisible();
 
     const admin = await context.newPage();
@@ -149,6 +151,7 @@ test("UC06: trainer edits and validates their profile, admin browses the persist
           bio: original.bio,
           specialties: original.specialties,
           experienceYears: original.experienceYears,
+          workStatus: original.workStatus,
           avatarUrl: original.avatarUrl,
           version,
         },

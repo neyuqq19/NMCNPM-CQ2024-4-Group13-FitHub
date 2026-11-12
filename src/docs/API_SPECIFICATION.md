@@ -113,6 +113,8 @@ Ngừng sử dụng ghi lý do tối đa 1000 ký tự trong AuditLog, chuyển 
 
 ### UC06 — Hồ sơ chuyên môn PT
 
+PT có thể gửi thêm `workStatus` khi lưu hồ sơ qua `PUT /api/trainers/me/profile`. Giá trị mặc định là `ACTIVE`. Chuyển sang `ON_LEAVE` giữ quyền đăng nhập và lịch đã tạo, đồng thời trả danh sách rỗng ở `GET /api/trainers/:id/available-slots`. Chuyển lại `ACTIVE` sẽ hiển thị các ca OPEN còn ở tương lai. Nếu bỏ qua trường này khi cập nhật, trạng thái làm việc hiện tại được giữ nguyên.
+
 Các endpoint dưới đây yêu cầu phiên đăng nhập. UC08 dùng `id` của hồ sơ trong danh sách làm định danh PT.
 
 | Phương thức | Đường dẫn | Dữ liệu |

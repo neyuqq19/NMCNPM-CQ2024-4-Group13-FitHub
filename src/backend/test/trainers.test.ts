@@ -127,6 +127,7 @@ test("UC06 only owners may edit, drafts stay private, invalid fields cannot chan
     experienceYears: [-1, 51, 1.5, "3"],
     version: [null, -1, "0"],
     avatarUrl: ["javascript:void(0)"],
+    workStatus: ["LOCKED", null],
   })) {
     for (const value of invalid) {
       const res = await save(trainer, { ...profile, [key]: value });
@@ -373,6 +374,46 @@ test("UC07 atomic registration, buffer, private weekly view, future availability
   );
   assert.equal(open.body[0].member, null);
   assert.equal(open.body[0].unavailableReason, null);
+  const beforeLeave = (
+    await api
+      .get(base + "/me")
+      .set("Authorization", trainer)
+      .expect(200)
+  ).body;
+  const leave = await save(trainer, {
+    ...profile,
+    version: beforeLeave.version,
+    workStatus: "ON_LEAVE",
+  }).expect(200);
+  assert.equal(leave.body.accountStatus, "ACTIVE");
+  assert.equal(leave.body.workStatus, "ON_LEAVE");
+  assert.deepEqual((await available().expect(200)).body, []);
+  const preserved = await save(trainer, {
+    ...profile,
+    version: leave.body.version,
+  }).expect(200);
+  assert.equal(preserved.body.workStatus, "ON_LEAVE");
+  await day("me", trainer).expect(200);
+  const relogin = await api
+    .post("/api/auth/login")
+    .send({
+      identifier: run + "owner@example.com",
+      password,
+      platform: "WEB",
+      deviceId: randomUUID(),
+      requestId: randomUUID(),
+    })
+    .expect(200);
+  trainer = "Bearer " + relogin.body.accessToken;
+  await save(trainer, {
+    ...profile,
+    version: preserved.body.version,
+    workStatus: "ACTIVE",
+  }).expect(200);
+  assert.deepEqual(
+    (await available().expect(200)).body.map((s: { id: string }) => s.id),
+    [a.id],
+  );
   await db.user.update({ where: { id: actor }, data: { status: "LOCKED" } });
   assert.deepEqual((await available().expect(200)).body, []);
   await db.user.update({ where: { id: actor }, data: { status: "ACTIVE" } });
