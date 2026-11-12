@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Inject,
   NotFoundException,
 } from "@nestjs/common";
 import type {
@@ -75,7 +76,7 @@ function parseOptionalDate(
 
 @Injectable()
 export class EquipmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   private assertUuid(id: string) {
     if (!UUID_RE.test(id)) {
