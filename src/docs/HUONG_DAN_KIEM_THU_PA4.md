@@ -147,7 +147,7 @@ Khi viết các ca kiểm thử cho Use Case của mình, mỗi thành viên c�
 
 ---
 
-### 👤 2. Trịnh Văn Hợp (`24120320` — `UC05` & `UC10`)
+### 👤 2. Trịnh Văn Hợp (`24120318` — `UC05` & `UC10`)
 
 | Use Case | Quy tắc nghiệp vụ (`SAD` / `UCSpec`) | Lớp tương đương Hợp lệ (Valid EP) | Lớp Không hợp lệ & Giá trị biên (BVA) cần kiểm thử |
 | :---: | :--- | :--- | :--- |

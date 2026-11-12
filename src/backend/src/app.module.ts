@@ -7,9 +7,19 @@ import { PackagesModule } from './modules/packages/packages.module';
 import { CheckInsModule } from './modules/check-ins/check-ins.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { TrainersModule } from './modules/trainers/trainers.module';
+import { MembershipsModule } from './modules/memberships/memberships.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, MembersModule, PackagesModule, CheckInsModule, SalesModule, TrainersModule],
+  imports: [
+    DatabaseModule,
+    AuthModule,
+    MembersModule,
+    PackagesModule,
+    CheckInsModule,
+    SalesModule,
+    MembershipsModule,
+    TrainersModule,
+  ],
   controllers: [AppController],
 })
 export class AppModule {}

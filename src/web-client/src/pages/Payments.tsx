@@ -167,6 +167,18 @@ export function PackagePage() {
                       "Thời hạn",
                       `${date(startsOn)} – ${date(packageEnd(startsOn, pack.durationMonths))}`,
                     ],
+                    [
+                      "Khung giờ tập",
+                      pack.accessWindow === "OFF_PEAK"
+                        ? "Thấp điểm Off-peak (09:00–16:00)"
+                        : "Toàn khung giờ (05:30–22:00)",
+                    ],
+                    [
+                      "Buổi PT kèm theo",
+                      (pack.ptSessionsIncluded ?? 0) > 0
+                        ? `Kèm ${pack.ptSessionsIncluded} buổi PT`
+                        : "Không kèm PT",
+                    ],
                     ["Quyền vào gym", pack.grantsGymAccess ? "Có" : "Không"],
                   ]}
                 />
