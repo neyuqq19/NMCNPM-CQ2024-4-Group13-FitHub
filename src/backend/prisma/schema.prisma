@@ -79,6 +79,9 @@ model User {
   auditLogs           AuditLog[]
   scanners            CheckInScanner[]
   createdFreezes      FreezePeriod[]     @relation("FreezeCreator")
+  reportedIncidents   EquipmentIncident[] @relation("IncidentReporter")
+  resolvedIncidents   EquipmentIncident[] @relation("IncidentResolver")
+  equipmentHistory    EquipmentHistory[]  @relation("EquipmentActor")
 }
 
 model Session {
@@ -360,4 +363,84 @@ model FreezePeriod {
   updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([membershipId, status])
+}
+
+enum EquipmentCategory {
+  CARDIO
+  STRENGTH
+  FREE_WEIGHT
+  FUNCTIONAL
+}
+
+enum EquipmentStatus {
+  OPERATIONAL
+  OUT_OF_ORDER
+  RETIRED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+model Equipment {
+  id            String              @id @default(uuid()) @db.Uuid
+  code          String              @unique
+  name          String
+  category      EquipmentCategory
+  zone          String
+  status        EquipmentStatus     @default(OPERATIONAL)
+  qrCodePayload String              @unique
+  purchasedAt   DateTime?           @db.Date
+  warrantyUntil DateTime?           @db.Date
+  notes         String?
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @updatedAt @db.Timestamptz(3)
+  incidents     EquipmentIncident[]
+  history       EquipmentHistory[]
+
+  @@index([category, status])
+  @@index([status])
+}
+
+model EquipmentIncident {
+  id             String           @id @default(uuid()) @db.Uuid
+  equipmentId    String           @db.Uuid
+  equipment      Equipment        @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  reportedById   String?          @db.Uuid
+  reportedBy     User?            @relation("IncidentReporter", fields: [reportedById], references: [id], onDelete: Restrict)
+  resolvedById   String?          @db.Uuid
+  resolvedBy     User?            @relation("IncidentResolver", fields: [resolvedById], references: [id], onDelete: Restrict)
+  description    String
+  severity       IncidentSeverity @default(MEDIUM)
+  status         IncidentStatus   @default(OPEN)
+  resolutionNote String?
+  reportedAt     DateTime         @default(now()) @db.Timestamptz(3)
+  resolvedAt     DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([equipmentId, status])
+}
+
+model EquipmentHistory {
+  id          String           @id @default(uuid()) @db.Uuid
+  equipmentId String           @db.Uuid
+  equipment   Equipment        @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  actorId     String?          @db.Uuid
+  actor       User?            @relation("EquipmentActor", fields: [actorId], references: [id], onDelete: Restrict)
+  action      String
+  fromStatus  EquipmentStatus?
+  toStatus    EquipmentStatus
+  note        String?
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@index([equipmentId, createdAt])
 }

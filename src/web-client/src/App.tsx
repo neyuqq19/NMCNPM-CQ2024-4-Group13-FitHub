@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
+  Dumbbell,
 } from "lucide-react";
 import { Brand, Notice, PageHeading } from "./components";
 import { AdminLogin } from "./pages/AdminLogin";
@@ -31,6 +32,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { CheckInPage } from "./pages/CheckIn";
 import { MemberList, MemberDetail, MemberForm } from "./pages/Members";
 import { PackagesPage } from "./pages/Packages";
+import { EquipmentsPage, EquipmentDetailPage } from "./pages/Equipments";
 import {
   PackagePage,
   PaymentPage,
@@ -159,6 +161,10 @@ function Shell({
               <NavLink to="/members" title={collapsed ? "Hội viên" : undefined}>
                 <Users size={22} />
                 {!collapsed && <span>Hội viên</span>}
+              </NavLink>
+              <NavLink to="/equipments" title={collapsed ? "Thiết bị" : undefined}>
+                <Dumbbell size={22} />
+                {!collapsed && <span>Thiết bị</span>}
               </NavLink>
               <NavLink
                 to="/check-in"
@@ -334,6 +340,8 @@ export function App() {
             <>
               <Route index element={<Home user={user!} />} />
               <Route path="packages" element={<PackagesPage />} />
+              <Route path="equipments" element={<EquipmentsPage />} />
+              <Route path="equipments/:id" element={<EquipmentDetailPage />} />
               <Route path="check-in" element={<CheckInPage />} />
               <Route path="members" element={<MemberList />} />
               <Route path="members/new" element={<MemberForm />} />
