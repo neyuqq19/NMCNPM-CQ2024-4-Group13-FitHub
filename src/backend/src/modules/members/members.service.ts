@@ -46,6 +46,8 @@ function summary(m: Profile["memberships"][number]) {
     status,
     startsOn: start,
     endsBefore: end,
+    durationMonths: m.durationMonthsSnapshot,
+    ptSessionsRemaining: m.ptSessionsRemaining,
   };
 }
 function detail(p: Profile) {

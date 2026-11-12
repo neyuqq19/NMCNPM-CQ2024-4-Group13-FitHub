@@ -42,6 +42,8 @@ export interface PackageDto {
   durationMonths: number;
   price: number;
   grantsGymAccess: boolean;
+  ptSessionsIncluded?: number;
+  isActive?: boolean;
 }
 
 export interface MemberDto {
@@ -92,6 +94,8 @@ export interface MembershipSummary {
   status: string;
   startsOn: string;
   endsBefore: string;
+  durationMonths?: number;
+  ptSessionsRemaining?: number;
 }
 export interface PackagePurchaseDto extends MembershipSummary {
   registeredAt: string;
@@ -270,4 +274,84 @@ export interface MyCheckInSummaryDto {
   serverTime: string;
   sessionsThisMonth: number;
   week: { date: string; count: number }[];
+}
+
+export type FreezeStatus = "ACTIVE" | "ENDED";
+
+export interface FreezePeriodDto {
+  id: string;
+  membershipId: string;
+  startsOn: string;
+  endsBefore: string;
+  days: number;
+  reason: string;
+  status: FreezeStatus;
+  endedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreatePackageRequest {
+  code: string;
+  name: string;
+  durationMonths: 1 | 3 | 6 | 12;
+  price: number;
+  accessWindow?: "REGULAR" | "OFF_PEAK";
+  grantsGymAccess?: boolean;
+  ptSessionsIncluded?: number;
+  isActive?: boolean;
+}
+
+export interface UpdatePackageRequest {
+  name?: string;
+  durationMonths?: 1 | 3 | 6 | 12;
+  price?: number;
+  accessWindow?: "REGULAR" | "OFF_PEAK";
+  grantsGymAccess?: boolean;
+  ptSessionsIncluded?: number;
+  isActive?: boolean;
+}
+
+export interface FreezeMembershipRequest {
+  days: number;
+  reason: string;
+  startsOn?: string;
+}
+
+export interface FreezeMembershipResponse {
+  membership: MembershipSummary & {
+    durationMonths: number;
+    ptSessionsRemaining: number;
+    frozenDaysUsed: number;
+    freezePeriods: FreezePeriodDto[];
+  };
+  shiftedScheduledMembership: MembershipSummary | null;
+}
+
+export interface MyMembershipDetailDto {
+  hasProfile: boolean;
+  memberCode: string | null;
+  activeMembership:
+    | (MembershipSummary & {
+        durationMonths: number;
+        accessWindow: "REGULAR" | "OFF_PEAK";
+        grantsGymAccess: boolean;
+        ptSessionsSnapshot: number;
+        ptSessionsRemaining: number;
+        frozenDaysUsed: number;
+        freezePeriods: FreezePeriodDto[];
+      })
+    | null;
+  scheduledMembership:
+    | (MembershipSummary & {
+        durationMonths: number;
+        accessWindow: "REGULAR" | "OFF_PEAK";
+        grantsGymAccess: boolean;
+        ptSessionsSnapshot: number;
+        ptSessionsRemaining: number;
+      })
+    | null;
+  recentMemberships: (MembershipSummary & {
+    durationMonths: number;
+    price: number;
+  })[];
 }
