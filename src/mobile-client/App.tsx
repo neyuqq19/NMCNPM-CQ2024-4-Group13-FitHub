@@ -19,6 +19,7 @@ import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
 import {
   DEFAULT_API_BASE_URL,
   MobileApiError,
+  getMyWorkouts,
   logoutMobile,
   restoreMobileSession,
   refreshMyMembership,
@@ -28,6 +29,7 @@ import { clearSession, loadSession, saveSession } from "./src/session";
 import { HomePanel } from "./src/HomePanel";
 import { CheckInPanel } from "./src/CheckInPanel";
 import { AuthPanel } from "./src/AuthPanel";
+import { WorkoutLogPanel } from "./src/WorkoutLogPanel";
 import { SPORTS_IMAGES } from "./src/sportsImages";
 import { C } from "./src/theme";
 import type { MobileSession, ScreenId } from "./src/types";
@@ -374,6 +376,20 @@ export default function App() {
   const [session, setSession] = useState<MobileSession | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [restoreError, setRestoreError] = useState("");
+  // UC13: số buổi tập thật trong tháng cho màn 02_MY_PACKAGE.
+  const [workoutsThisMonth, setWorkoutsThisMonth] = useState<number | null>(
+    null,
+  );
+  useEffect(() => {
+    if (screen !== "02_MY_PACKAGE" || !session) return;
+    let live = true;
+    getMyWorkouts(apiBaseUrl, session, { pageSize: 1 })
+      .then((r) => live && setWorkoutsThisMonth(r.stats.sessionsThisMonth))
+      .catch(() => live && setWorkoutsThisMonth(null));
+    return () => {
+      live = false;
+    };
+  }, [screen, session?.accessToken, apiBaseUrl]);
   async function restore() {
     setInitializing(true);
     setRestoreError("");
@@ -562,10 +578,6 @@ export default function App() {
               contentContainerStyle={styles.darkScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={{ color: C.mutedOnDark, marginBottom: 16 }}>
-                Bản xem thử: lịch tập và biểu đồ gói tập là dữ liệu minh họa.
-                Quyền check-in được kiểm tra trực tiếp trên hệ thống.
-              </Text>
               <FourDotsHeader
                 title="Gói tập của tôi"
                 onPressDots={() => setScreen("05_EXPIRED")}
@@ -621,14 +633,19 @@ export default function App() {
 
               {/* 2 Mini Cards */}
               <View style={styles.twoColGrid}>
-                <View
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Mở nhật ký tập luyện"
                   style={[styles.miniCard144, { backgroundColor: C.lilac }]}
+                  onPress={() => setScreen("10_WORKOUT_LOG")}
                 >
                   <TopoAndAthleteDecoration side="right" />
                   <Text style={styles.miniCardTitle}>Buổi đã tập</Text>
-                  <Text style={styles.miniCardBigNum}>12</Text>
+                  <Text style={styles.miniCardBigNum}>
+                    {workoutsThisMonth ?? "–"}
+                  </Text>
                   <Text style={styles.miniCardFoot}>Buổi trong tháng</Text>
-                </View>
+                </Pressable>
 
                 <View
                   style={[styles.miniCard144, { backgroundColor: C.lavender }]}
@@ -815,6 +832,19 @@ export default function App() {
             <MetaballBottomDock
               activeIndex={1}
               onSelectTab={handleBottomDockSelect}
+            />
+          </View>
+        )}
+
+        {/* =====================================================================
+          10 · NHẬT KÝ TẬP LUYỆN (UC13)
+         ===================================================================== */}
+        {screen === "10_WORKOUT_LOG" && session && (
+          <View style={styles.darkScreenRoot}>
+            <WorkoutLogPanel
+              baseUrl={apiBaseUrl}
+              session={session}
+              onBack={() => setScreen("01_HOME")}
             />
           </View>
         )}
