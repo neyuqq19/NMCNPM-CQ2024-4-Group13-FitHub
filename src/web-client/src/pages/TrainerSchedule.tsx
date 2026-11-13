@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   generateWorkingSlots,
@@ -7,9 +13,14 @@ import {
   type WorkingSlotDto,
 } from "@fithub/contracts";
 import { Notice, PageHeading } from "../components";
-import { date, today } from "../data";
+import {
+  TrainerDateField,
+  trainerDateLabel,
+} from "../components/TrainerDateField";
+import { today } from "../data";
 import { useResource } from "../hooks/useResource";
 import { fetchFromApi } from "../services/api.service";
+import "./TrainerSchedule.css";
 
 const clock = new Intl.DateTimeFormat("vi-VN", {
   timeZone: "Asia/Ho_Chi_Minh",
@@ -17,10 +28,21 @@ const clock = new Intl.DateTimeFormat("vi-VN", {
   minute: "2-digit",
   hourCycle: "h23",
 });
-const label = {
-  OPEN: "Trống",
-  BOOKED: "Đã có hội viên đặt",
-  UNAVAILABLE: "Đã báo bận",
+const weekdays = [
+  "Thứ hai",
+  "Thứ ba",
+  "Thứ tư",
+  "Thứ năm",
+  "Thứ sáu",
+  "Thứ bảy",
+  "Chủ nhật",
+];
+const labels = {
+  OPEN: "Còn trống",
+  BOOKED: "Đã đặt",
+  UNAVAILABLE: "Bận",
+  STARTED: "Đã bắt đầu · Không có lịch hẹn",
+  PAST: "Đã qua · Không có lịch hẹn",
 };
 
 function times(slot: WorkingSlotDto) {
@@ -33,18 +55,37 @@ function shift(day: string, offset: number) {
   return d.toISOString().slice(0, 10);
 }
 
-function monday(value: string | null) {
-  const day =
-    value &&
+function validDay(value: string | null): value is string {
+  return (
+    !!value &&
     /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    Number.isFinite(Date.parse(value))
-      ? value
-      : today();
-  return shift(day, -(new Date(day + "T00:00:00Z").getUTCDay() + 6) % 7);
+    Number.isFinite(Date.parse(value)) &&
+    shift(value, 0) === value
+  );
+}
+
+function monday(day: string) {
+  return shift(day, -((new Date(day + "T00:00:00Z").getUTCDay() + 6) % 7));
 }
 
 function failure(e: unknown) {
   return e instanceof Error ? e.message : "Không thể cập nhật lịch làm việc.";
+}
+
+function slotStatus(slot: WorkingSlotDto, now: number) {
+  if (slot.status !== "OPEN" || Date.parse(slot.startTime) > now)
+    return slot.status;
+  return Date.parse(slot.endTime) <= now ? "PAST" : "STARTED";
+}
+
+function lockedReason(slot: WorkingSlotDto, now: number) {
+  if (slot.status === "BOOKED")
+    return "Ca đã có hội viên đặt. Vào mục Lịch hẹn để hủy theo quy định trước khi thay đổi ca.";
+  const remaining = Date.parse(slot.startTime) - now;
+  if (remaining <= 0) return "Ca đã bắt đầu nên không thể thay đổi.";
+  return remaining < 86400000
+    ? "Chỉ được thay đổi ca trước giờ bắt đầu tối thiểu 24 giờ."
+    : "";
 }
 
 export function AvailableSlots({ trainerId }: { trainerId: string }) {
@@ -61,12 +102,7 @@ export function AvailableSlots({ trainerId }: { trainerId: string }) {
       <h2>Ca trống</h2>
       <label className="field">
         Tra cứu ca trống theo ngày
-        <input
-          type="date"
-          value={day}
-          min={today()}
-          onChange={(e) => setDay(e.target.value)}
-        />
+        <TrainerDateField value={day} min={today()} onChange={setDay} />
       </label>
       {resource.loading && <p role="status">Đang tải ca trống…</p>}
       {resource.error && (
@@ -92,33 +128,90 @@ export function AvailableSlots({ trainerId }: { trainerId: string }) {
   );
 }
 
-function RegisterAvailability({ onSave }: { onSave: (day: string) => void }) {
-  const [day, setDay] = useState(today);
+function ScheduleDialog({
+  title,
+  busy,
+  close,
+  children,
+}: {
+  title: string;
+  busy: boolean;
+  close: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current!;
+    dialog.showModal();
+    return () => dialog.close();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="slot-dialog schedule-dialog"
+      aria-labelledby="schedule-dialog-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) close();
+      }}
+    >
+      <div className="schedule-dialog-head">
+        <h2 id="schedule-dialog-title">{title}</h2>
+        <button
+          type="button"
+          className="button outline"
+          disabled={busy}
+          onClick={close}
+          aria-label="Đóng"
+        >
+          ×
+        </button>
+      </div>
+      {children}
+    </dialog>
+  );
+}
+
+function RegisterAvailability({
+  initialDay,
+  now,
+  close,
+  onSave,
+}: {
+  initialDay: string;
+  now: number;
+  close: () => void;
+  onSave: (day: string, message: string) => void;
+}) {
+  const [day, setDay] = useState(initialDay);
   const [start, setStart] = useState("08:00"),
     [end, setEnd] = useState("12:00");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(""),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   let preview: ReturnType<typeof generateWorkingSlots> | undefined;
   let invalid = "";
+  const begins = Date.parse(day + "T" + start + ":00+07:00");
+  const pastMessage = "Chọn ngày và giờ bắt đầu trong tương lai.";
   if (day && start && end) {
     try {
       preview = generateWorkingSlots(day, start, end);
-      if (day < today()) invalid = "Ngày đăng ký không được ở trong quá khứ.";
+      if (begins <= now) invalid = pastMessage;
     } catch (e) {
       invalid =
         e instanceof Error && e.message === "RANGE_TOO_SHORT"
           ? "Khung giờ đăng ký phải tối thiểu 60 phút để tạo được ít nhất 1 ca làm việc."
-          : "Vui lòng chọn khung giờ hợp lệ trong khoảng 06:00–22:00.";
+          : "Nhập giờ theo định dạng HH:mm trong khoảng 06:00–22:00.";
     }
   }
-
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!preview || invalid || busy) return;
+    if (begins <= Date.now()) {
+      setError(pastMessage);
+      return;
+    }
     setBusy(true);
     setError("");
-    setMessage("");
     try {
       const result = await fetchFromApi<RegisterAvailabilityResponse>(
         "/api/trainers/me/availability",
@@ -127,46 +220,32 @@ function RegisterAvailability({ onSave }: { onSave: (day: string) => void }) {
           body: JSON.stringify({ date: day, startTime: start, endTime: end }),
         },
       );
-      setMessage(
-        `Đã tạo ${result.slots.length} ca làm việc. Số phút dư bỏ qua: ${result.discardedMinutes}.`,
-      );
-      onSave(day);
+      onSave(day, `Đã tạo ${result.slots.length} ca làm việc.`);
     } catch (e) {
       setError(failure(e));
-    } finally {
       setBusy(false);
     }
   }
-
   return (
-    <section className="panel">
-      <h2>Đăng ký khung giờ rảnh</h2>
-      <form
-        onSubmit={save}
-        onChange={() => {
-          setError("");
-          setMessage("");
-        }}
-      >
+    <ScheduleDialog title="Đăng ký giờ rảnh" close={close} busy={busy}>
+      <form onSubmit={save} onChange={() => setError("")}>
         <fieldset className="trainer-fields" disabled={busy}>
-          <div className="slot-controls">
-            <label className="field">
-              Ngày đăng ký
-              <input
-                required
-                type="date"
-                min={today()}
-                value={day}
-                onChange={(e) => setDay(e.target.value)}
-              />
-            </label>
+          <label className="field">
+            Ngày đăng ký
+            <TrainerDateField
+              required
+              min={today()}
+              value={day}
+              onChange={setDay}
+            />
+          </label>
+          <div className="schedule-times">
             <label className="field">
               Từ giờ
               <input
                 required
-                type="time"
-                min="06:00"
-                max="22:00"
+                placeholder="HH:mm"
+                maxLength={5}
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
               />
@@ -175,9 +254,8 @@ function RegisterAvailability({ onSave }: { onSave: (day: string) => void }) {
               Đến giờ
               <input
                 required
-                type="time"
-                min="06:00"
-                max="22:00"
+                placeholder="HH:mm"
+                maxLength={5}
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
               />
@@ -186,11 +264,11 @@ function RegisterAvailability({ onSave }: { onSave: (day: string) => void }) {
           {invalid && <Notice error>{invalid}</Notice>}
           {preview && !invalid && (
             <section aria-label="Xem trước các ca">
-              <h3>Xem trước các ca</h3>
+              <h3>Xem trước · {preview.slots.length} ca</h3>
               <ul className="slot-preview">
-                {preview.slots.map((slot) => (
-                  <li key={slot.startTime}>
-                    {slot.startTime}–{slot.endTime}
+                {preview.slots.map((s) => (
+                  <li key={s.startTime}>
+                    {s.startTime}–{s.endTime}
                   </li>
                 ))}
               </ul>
@@ -200,109 +278,138 @@ function RegisterAvailability({ onSave }: { onSave: (day: string) => void }) {
               </p>
             </section>
           )}
+          {error && <Notice error>{error}</Notice>}
           <button className="button primary" disabled={!preview || !!invalid}>
             Lưu lịch làm việc
           </button>
         </fieldset>
       </form>
-      {error && <Notice error>{error}</Notice>}
-      {message && <Notice>{message}</Notice>}
-    </section>
+    </ScheduleDialog>
   );
 }
 
-type Change = { slot: WorkingSlotDto; action: "busy" | "reopen" | "delete" };
 const actions = { busy: "Báo bận", reopen: "Mở lại ca", delete: "Xóa ca" };
+type Action = keyof typeof actions;
 
-function SlotConfirmation({
-  change,
+function SlotDetail({
+  slot,
+  now,
+  owner,
   close,
   saved,
 }: {
-  change: Change;
+  slot: WorkingSlotDto;
+  now: number;
+  owner: boolean;
   close: () => void;
   saved: (message: string) => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const [reason, setReason] = useState(""),
-    [busy, setBusy] = useState(false),
+  const [action, setAction] = useState<Action | null>(null),
+    [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  useEffect(() => {
-    const dialog = ref.current!;
-    dialog.showModal();
-    return () => dialog.close();
-  }, []);
+  const locked = lockedReason(slot, now);
+  const status = slotStatus(slot, now);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy || (change.action === "busy" && !reason.trim())) return;
+    if (!owner || busy || !action || (action === "busy" && !reason.trim()))
+      return;
+    const lock = lockedReason(slot, Date.now());
+    if (lock) {
+      setError(lock);
+      return;
+    }
     setBusy(true);
     setError("");
-    const path = `/api/trainers/me/slots/${encodeURIComponent(change.slot.id)}`;
+    const path = `/api/trainers/me/slots/${encodeURIComponent(slot.id)}`;
     try {
-      if (change.action === "delete")
-        await fetchFromApi(path, { method: "DELETE" });
+      if (action === "delete") await fetchFromApi(path, { method: "DELETE" });
       else
         await fetchFromApi(path + "/availability", {
           method: "PATCH",
           body: JSON.stringify(
-            change.action === "busy"
+            action === "busy"
               ? { status: "UNAVAILABLE", reason: reason.trim() }
               : { status: "OPEN" },
           ),
         });
-      saved(`Đã ${actions[change.action].toLocaleLowerCase("vi")}.`);
+      saved(`Đã ${actions[action].toLocaleLowerCase("vi")}.`);
     } catch (e) {
       setError(failure(e));
       setBusy(false);
     }
   }
   return (
-    <dialog
-      ref={ref}
-      className="slot-dialog"
-      aria-labelledby="slot-change-title"
-      onCancel={(e) => {
-        e.preventDefault();
-        if (!busy) close();
-      }}
-    >
-      <h2 id="slot-change-title">{actions[change.action]}</h2>
+    <ScheduleDialog title="Chi tiết ca làm việc" busy={busy} close={close}>
       <p>
-        {date(change.slot.workDate)} · {times(change.slot)}
+        {trainerDateLabel(slot.workDate)} · <strong>{times(slot)}</strong>
       </p>
-      <form onSubmit={submit}>
-        {change.action === "busy" && (
-          <label className="field">
-            Lý do báo bận
-            <textarea
-              required
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </label>
-        )}
-        {change.action === "delete" && (
-          <p>Ca làm việc này sẽ được xóa khỏi lịch.</p>
-        )}
-        {error && <Notice error>{error}</Notice>}
-        <div className="slot-controls">
-          <button
-            className="button outline"
-            type="button"
-            disabled={busy}
-            onClick={close}
-          >
-            Hủy
-          </button>
-          <button
-            className="button primary"
-            disabled={busy || (change.action === "busy" && !reason.trim())}
-          >
-            Xác nhận
-          </button>
-        </div>
-      </form>
-    </dialog>
+      <span className={`schedule-badge tone-${status}`}>{labels[status]}</span>
+      {slot.member && (
+        <p>
+          Hội viên: {slot.member.displayName} · {slot.member.memberCode}
+        </p>
+      )}
+      {slot.unavailableReason && <p>Lý do báo bận: {slot.unavailableReason}</p>}
+      {owner &&
+        (locked ? (
+          <p>{locked}</p>
+        ) : action ? (
+          <form onSubmit={submit}>
+            <h3>{actions[action]}</h3>
+            {action === "busy" && (
+              <label className="field">
+                Lý do báo bận
+                <textarea
+                  required
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </label>
+            )}
+            {action === "delete" && (
+              <p>Ca làm việc này sẽ được xóa khỏi lịch.</p>
+            )}
+            <div className="slot-controls">
+              <button
+                className="button outline"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setAction(null);
+                  setError("");
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                className="button primary"
+                disabled={busy || (action === "busy" && !reason.trim())}
+              >
+                Xác nhận
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="slot-controls">
+            <button
+              className="button primary"
+              onClick={() =>
+                setAction(slot.status === "OPEN" ? "busy" : "reopen")
+              }
+            >
+              {slot.status === "OPEN" ? actions.busy : actions.reopen}
+            </button>
+            <button
+              className="button outline"
+              onClick={() => setAction("delete")}
+            >
+              {actions.delete}
+            </button>
+          </div>
+        ))}
+      {error && <Notice error>{error}</Notice>}
+    </ScheduleDialog>
   );
 }
 
@@ -314,172 +421,212 @@ function WeekSchedule({
   owner: boolean;
 }) {
   const [params, setParams] = useSearchParams();
-  const start = monday(params.get("week"));
-  const end = shift(start, 6);
-  const [change, setChange] = useState<Change | null>(null);
-  const [message, setMessage] = useState("");
+  const gymDay = today();
+  const routeDay = params.get("day") || params.get("week");
+  const selected = validDay(routeDay) ? routeDay : gymDay;
+  const start = monday(selected),
+    end = shift(start, 6);
+  const days = weekdays.map((_, index) => shift(start, index));
+  const [detail, setDetail] = useState<WorkingSlotDto | null>(null),
+    [register, setRegister] = useState(false);
+  const [message, setMessage] = useState(""),
+    [now, setNow] = useState(Date.now);
+  const selectedButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    const button = selectedButton.current;
+    if (button && window.matchMedia("(max-width: 800px)").matches) {
+      button.parentElement?.scrollTo({
+        left: button.offsetLeft - 12,
+      });
+    }
+  }, [selected]);
   const resource = useResource(trainerId + start, () =>
     fetchFromApi<WorkingSlotDto[]>(
       `/api/trainers/${encodeURIComponent(trainerId)}/slots?from=${start}&to=${end}`,
     ),
   );
-  function showWeek(day: string) {
+  function showDay(day: string) {
+    if (!validDay(day)) return;
     const next = new URLSearchParams(params);
     next.set("week", monday(day));
+    next.set("day", day);
     setParams(next);
+    setMessage("");
+  }
+  function position(value: number, day: string) {
+    return Math.min(
+      100,
+      Math.max(
+        0,
+        ((value - Date.parse(day + "T06:00:00+07:00")) / (16 * 3600000)) * 100,
+      ),
+    );
   }
   return (
-    <>
-      {owner && (
+    <section className="panel schedule-panel" aria-label="Lịch tuần">
+      <div className="schedule-head">
+        <h2>
+          Lịch tuần{" "}
+          <small>
+            {trainerDateLabel(start)} – {trainerDateLabel(end)}
+          </small>
+        </h2>
+        {owner && (
+          <button
+            className="button primary"
+            onClick={() => {
+              setNow(Date.now());
+              setRegister(true);
+            }}
+          >
+            + Đăng ký giờ rảnh
+          </button>
+        )}
+      </div>
+      <div className="slot-controls schedule-nav">
+        <button
+          className="button outline"
+          onClick={() => showDay(shift(selected, -7))}
+        >
+          Tuần trước
+        </button>
+        <button className="button outline" onClick={() => showDay(today())}>
+          Tuần hiện tại
+        </button>
+        <button
+          className="button outline"
+          onClick={() => showDay(shift(selected, 7))}
+        >
+          Tuần sau
+        </button>
+        <label className="field">
+          Đi tới ngày
+          <TrainerDateField value={selected} onChange={showDay} />
+        </label>
+      </div>
+      {message && <Notice>{message}</Notice>}
+      {resource.loading && <p role="status">Đang tải lịch tuần…</p>}
+      {resource.error && (
+        <Notice error>
+          {resource.error}{" "}
+          <button className="button outline" onClick={resource.reload}>
+            Thử lại
+          </button>
+        </Notice>
+      )}
+      <div className="schedule-days" aria-label="Chọn ngày trong tuần">
+        {days.map((day, i) => (
+          <button
+            key={day}
+            type="button"
+            aria-pressed={selected === day}
+            aria-current={day === gymDay ? "date" : undefined}
+            ref={selected === day ? selectedButton : undefined}
+            onClick={() => showDay(day)}
+          >
+            <strong>{weekdays[i]}</strong>
+            <span>{trainerDateLabel(day).slice(0, 5)}</span>
+            {day === gymDay && <small>Hôm nay</small>}
+            {resource.data && (
+              <small className="schedule-count">
+                {resource.data.filter((slot) => slot.workDate === day).length}{" "}
+                ca
+              </small>
+            )}
+          </button>
+        ))}
+      </div>
+      {resource.data && (
+        <div className="schedule-grid">
+          <div className="schedule-hours" aria-hidden="true">
+            {Array.from({ length: 17 }, (_, i) => (
+              <span key={i} style={{ top: `${(i / 16) * 100}%` }}>
+                {String(i + 6).padStart(2, "0")}:00
+              </span>
+            ))}
+          </div>
+          {days.map((day) => {
+            const slots = resource.data!.filter((s) => s.workDate === day);
+            const elapsed = position(now, day);
+            return (
+              <div
+                key={day}
+                className={`schedule-column ${selected === day ? "is-selected" : ""} ${day === gymDay ? "is-today" : ""} ${day < gymDay ? "is-past" : ""}`}
+                role="group"
+                aria-label={trainerDateLabel(day)}
+              >
+                <div
+                  className="schedule-elapsed"
+                  aria-hidden="true"
+                  style={{ height: `${elapsed}%` }}
+                />
+                {!slots.length && (
+                  <p className="schedule-empty">Chưa đăng ký</p>
+                )}
+                {slots.map((slot) => {
+                  const status = slotStatus(slot, now);
+                  const top = position(Date.parse(slot.startTime), day),
+                    bottom = position(Date.parse(slot.endTime), day);
+                  return (
+                    <button
+                      key={slot.id}
+                      type="button"
+                      className={`schedule-slot tone-${status}`}
+                      style={{ top: `${top}%`, height: `${bottom - top}%` }}
+                      onClick={() => {
+                        setNow(Date.now());
+                        setDetail(slot);
+                      }}
+                    >
+                      <strong>{times(slot)}</strong>
+                      <span>{labels[status]}</span>
+                      {slot.member && (
+                        <small>
+                          {slot.member.displayName} · {slot.member.memberCode}
+                        </small>
+                      )}
+                      {slot.unavailableReason && (
+                        <small>{slot.unavailableReason}</small>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {register && (
         <RegisterAvailability
-          onSave={(day) => {
-            setMessage("");
+          initialDay={selected}
+          now={now}
+          close={() => setRegister(false)}
+          onSave={(day, msg) => {
+            setRegister(false);
+            showDay(day);
+            setMessage(msg);
             if (monday(day) === start) resource.reload();
-            else showWeek(day);
           }}
         />
       )}
-      <section className="panel" aria-label="Lịch tuần">
-        <h2>
-          Lịch tuần {date(start)} – {date(end)}
-        </h2>
-        <div className="slot-controls">
-          <button
-            className="button outline"
-            onClick={() => showWeek(shift(start, -7))}
-          >
-            Tuần trước
-          </button>
-          <button className="button outline" onClick={() => showWeek(today())}>
-            Tuần hiện tại
-          </button>
-          <button
-            className="button outline"
-            onClick={() => showWeek(shift(start, 7))}
-          >
-            Tuần sau
-          </button>
-          <label className="field">
-            Đi tới ngày
-            <input
-              type="date"
-              value={start}
-              onChange={(e) => {
-                if (e.target.value) showWeek(e.target.value);
-              }}
-            />
-          </label>
-        </div>
-        {message && <Notice>{message}</Notice>}
-        {resource.loading && <p role="status">Đang tải lịch tuần…</p>}
-        {resource.error && (
-          <Notice error>
-            {resource.error}{" "}
-            <button className="button outline" onClick={resource.reload}>
-              Thử lại
-            </button>
-          </Notice>
-        )}
-        {resource.data && (
-          <div className="table-scroll">
-            <table className="slot-table">
-              <thead>
-                <tr>
-                  <th>Ngày</th>
-                  <th>Khung giờ</th>
-                  <th>Trạng thái</th>
-                  <th>Hội viên / Ghi chú</th>
-                  {owner && <th>Thao tác</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 7 }, (_, i) => {
-                  const day = shift(start, i);
-                  const rows = resource.data!.filter(
-                    (slot) => slot.workDate === day,
-                  );
-                  if (!rows.length)
-                    return (
-                      <tr key={day}>
-                        <th scope="row">{date(day)}</th>
-                        <td colSpan={owner ? 4 : 3}>Chưa có ca</td>
-                      </tr>
-                    );
-                  return rows.map((slot) => {
-                    const booked = slot.status === "BOOKED";
-                    const tooLate =
-                      Date.parse(slot.startTime) - Date.now() < 86400000;
-                    return (
-                      <tr key={slot.id}>
-                        <th scope="row">{date(day)}</th>
-                        <td>{times(slot)}</td>
-                        <td>
-                          <span className={`slot-status status-${slot.status}`}>
-                            {label[slot.status]}
-                          </span>
-                        </td>
-                        <td>
-                          {slot.member
-                            ? `${slot.member.displayName} · ${slot.member.memberCode}`
-                            : slot.unavailableReason || "—"}
-                        </td>
-                        {owner && (
-                          <td>
-                            {booked ? (
-                              "Hủy lịch hẹn theo quy định để thay đổi ca đã đặt."
-                            ) : tooLate ? (
-                              "Chỉ được thay đổi ca trước giờ bắt đầu tối thiểu 24 giờ."
-                            ) : (
-                              <div className="slot-controls">
-                                <button
-                                  className="button outline"
-                                  onClick={() =>
-                                    setChange({
-                                      slot,
-                                      action:
-                                        slot.status === "OPEN"
-                                          ? "busy"
-                                          : "reopen",
-                                    })
-                                  }
-                                >
-                                  {slot.status === "OPEN"
-                                    ? actions.busy
-                                    : actions.reopen}
-                                </button>
-                                <button
-                                  className="button outline"
-                                  onClick={() =>
-                                    setChange({ slot, action: "delete" })
-                                  }
-                                >
-                                  Xóa ca
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  });
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-      {change && (
-        <SlotConfirmation
-          change={change}
-          close={() => setChange(null)}
+      {detail && (
+        <SlotDetail
+          slot={detail}
+          now={now}
+          owner={owner}
+          close={() => setDetail(null)}
           saved={(msg) => {
-            setChange(null);
+            setDetail(null);
             setMessage(msg);
             resource.reload();
           }}
         />
       )}
-    </>
+    </section>
   );
 }
 

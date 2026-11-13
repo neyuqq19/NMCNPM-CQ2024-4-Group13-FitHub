@@ -199,6 +199,25 @@ test("UC06 concurrent profile writes, directory filters, certificates and audit 
     .expect(200);
   assert.deepEqual(reread.body, added.body);
   assert.equal((await list(member)).body.items[0].certificationCount, 1);
+  const edit = (auth: string, changes: object, certId: string = stored.id) =>
+    api
+      .patch(base + "/me/certifications/" + certId)
+      .set("Authorization", auth)
+      .send({ ...cert, version: 2, ...changes });
+  await edit(other, { version: 0 }).expect(403);
+  await edit(member, {}).expect(403);
+  await edit(trainer, { version: 1 }).expect(409);
+  await edit(trainer, { issuedAt: "2025-02-30" }).expect(400);
+  await edit(trainer, {}, randomUUID()).expect(404);
+  const revised = {
+    name: "ACE CPT",
+    issuer: "ACE",
+    issuedAt: "2025-06-01",
+    credentialUrl: null,
+  };
+  const edited = await edit(trainer, revised).expect(200);
+  assert.equal(edited.body.version, 3);
+  assert.deepEqual(edited.body.certifications, [{ id: stored.id, ...revised }]);
   const remove = (auth: string, version: number) =>
     api
       .delete(base + "/me/certifications/" + stored.id)
@@ -211,13 +230,13 @@ test("UC06 concurrent profile writes, directory filters, certificates and audit 
     0,
   );
   await remove(trainer, 1).expect(409);
-  const deleted = await remove(trainer, 2).expect(200);
-  assert.equal(deleted.body.version, 3);
+  const deleted = await remove(trainer, 3).expect(200);
+  assert.equal(deleted.body.version, 4);
   assert.deepEqual(deleted.body.certifications, []);
-  await remove(trainer, 3).expect(404);
+  await remove(trainer, 4).expect(404);
   assert.equal(
     (await db.trainerProfile.findUniqueOrThrow({ where: { id } })).version,
-    3,
+    4,
   );
   const logs = await db.auditLog.findMany({
     where: { entityId: id, actorId: actor },
@@ -228,6 +247,7 @@ test("UC06 concurrent profile writes, directory filters, certificates and audit 
     [
       "UPDATE_TRAINER_PROFILE",
       "ADD_TRAINER_CERTIFICATION",
+      "UPDATE_TRAINER_CERTIFICATION",
       "DELETE_TRAINER_CERTIFICATION",
     ],
   );
