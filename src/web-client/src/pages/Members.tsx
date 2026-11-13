@@ -16,6 +16,7 @@ import type {
   MemberDetailDto,
   MemberPage,
   MemberOverviewDto,
+  MembershipSummary,
 } from "@fithub/contracts";
 import { Badge, Empty, FieldError, Notice, PageHeading } from "../components";
 import { apiService, ApiError } from "../services/api.service";
@@ -444,6 +445,18 @@ export function MemberDetail() {
   const [reason, setReason] = useState("");
   const [saveError, setSaveError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [freezeTarget, setFreezeTarget] = useState<MembershipSummary | null>(
+    null,
+  );
+  const [freezeDays, setFreezeDays] = useState(7);
+  const [freezeStartsOn, setFreezeStartsOn] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+    }).format(new Date()),
+  );
+  const [freezeReason, setFreezeReason] = useState("");
+  const [freezeError, setFreezeError] = useState("");
+  const [freezeNotice, setFreezeNotice] = useState("");
   const lock = useRef(false);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -452,6 +465,73 @@ export function MemberDetail() {
   if (loading) return <p role="status">Đang tải hồ sơ…</p>;
   if (missing) return <MissingMember />;
   if (error || !m) return <LoadError error={error} retry={retry} />;
+  async function handleFreeze(e: FormEvent) {
+    e.preventDefault();
+    if (!freezeTarget || lock.current) return;
+    if (!freezeReason.trim()) {
+      setFreezeError("Vui lòng nhập lý do bảo lưu gói tập.");
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setFreezeError("");
+    setFreezeNotice("");
+    try {
+      const res = await apiService.freezeMembership(freezeTarget.id, {
+        days: freezeDays,
+        startsOn: freezeStartsOn,
+        reason: freezeReason.trim(),
+      });
+      setFreezeTarget(null);
+      setFreezeReason("");
+      const inclusiveEnd = date(
+        new Date(
+          new Date(res.membership.endsBefore).getTime() - 86400000,
+        ).toISOString(),
+      );
+      setFreezeNotice(
+        res.shiftedScheduledMembership
+          ? `Đã ghi nhận bảo lưu gói "${res.membership.packageName}" (${res.membership.code}) thêm ${freezeDays} ngày (hạn mới đến ${inclusiveEnd}, đã dùng ${res.membership.frozenDaysUsed}/30 ngày). Gói nối tiếp "${res.shiftedScheduledMembership.packageName}" (${res.shiftedScheduledMembership.code}) được dời ngày bắt đầu sang ${date(res.shiftedScheduledMembership.startsOn)}.`
+          : `Đã ghi nhận bảo lưu gói "${res.membership.packageName}" (${res.membership.code}) thêm ${freezeDays} ngày (hạn mới đến ${inclusiveEnd}, đã dùng ${res.membership.frozenDaysUsed}/30 ngày).`,
+      );
+      retry();
+    } catch (err) {
+      setFreezeError(
+        err instanceof Error ? err.message : "Không thể bảo lưu gói tập.",
+      );
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  async function handleUnfreeze(target: MembershipSummary) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setFreezeError("");
+    setFreezeNotice("");
+    try {
+      const res = await apiService.unfreezeMembership(target.id);
+      const inclusiveEnd = date(
+        new Date(
+          new Date(res.membership.endsBefore).getTime() - 86400000,
+        ).toISOString(),
+      );
+      setFreezeNotice(
+        res.shiftedScheduledMembership
+          ? `Đã kết thúc bảo lưu sớm và kích hoạt lại gói "${res.membership.packageName}" (${res.membership.code}). Hạn gói cập nhật đến ${inclusiveEnd} (tổng ngày bảo lưu thực tế: ${res.membership.frozenDaysUsed}/30 ngày); gói nối tiếp "${res.shiftedScheduledMembership.packageName}" điều chỉnh ngày bắt đầu về ${date(res.shiftedScheduledMembership.startsOn)}.`
+          : `Đã kết thúc bảo lưu sớm và kích hoạt lại gói "${res.membership.packageName}" (${res.membership.code}). Hạn gói cập nhật đến ${inclusiveEnd} (tổng ngày bảo lưu thực tế: ${res.membership.frozenDaysUsed}/30 ngày).`,
+      );
+      retry();
+    } catch (err) {
+      setFreezeError(
+        err instanceof Error ? err.message : "Không thể kích hoạt lại gói tập.",
+      );
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
   async function deactivate() {
     if (!m || lock.current) return;
     if (!reason.trim()) {
@@ -497,16 +577,130 @@ export function MemberDetail() {
           dụng.
         </Notice>
       )}
+      {freezeNotice && <Notice>{freezeNotice}</Notice>}
+      {freezeError && !freezeTarget && <Notice error>{freezeError}</Notice>}
       <div className="actions" style={{ marginBottom: 16 }}>
         {m.accountStatus === "ACTIVE" && m.verifiedAt && (
           <Link className="button primary" to={`/members/${m.id}/package`}>
             Đăng ký gói tập
           </Link>
         )}
+        {m.accountStatus !== "DEACTIVATED" &&
+          m.memberships.map((g) => {
+            if (g.status === "ACTIVE" && (g.durationMonths ?? 0) >= 6) {
+              return (
+                <button
+                  key={`freeze-${g.id}`}
+                  type="button"
+                  className="button outline"
+                  disabled={busy}
+                  onClick={() => {
+                    setFreezeTarget(g);
+                    setFreezeDays(7);
+                    setFreezeReason("");
+                    setFreezeError("");
+                  }}
+                >
+                  Bảo lưu gói ({g.packageName})
+                </button>
+              );
+            }
+            if (g.status === "FROZEN") {
+              return (
+                <button
+                  key={`unfreeze-${g.id}`}
+                  type="button"
+                  className="button outline"
+                  disabled={busy}
+                  onClick={() => void handleUnfreeze(g)}
+                >
+                  Kích hoạt lại gói ({g.packageName})
+                </button>
+              );
+            }
+            return null;
+          })}
         <Link className="button outline" to={`/history?member=${m.id}`}>
           Lịch sử giao dịch
         </Link>
       </div>
+      {freezeTarget && (
+        <form
+          className="panel"
+          aria-labelledby="freeze-membership-title"
+          onSubmit={handleFreeze}
+          style={{ marginBottom: 16 }}
+        >
+          <h2 id="freeze-membership-title">
+            Bảo lưu gói tập · {freezeTarget.packageName}
+          </h2>
+          <p>
+            Chỉ áp dụng cho gói tập từ 6 tháng trở lên đang hoạt động (từ 7 đến
+            tối đa 30 ngày cộng dồn). Thời hạn kết thúc và gói chờ kích hoạt kế
+            tiếp (nếu có) sẽ tự động được cộng lùi tương ứng.
+          </p>
+          <div className="form-grid">
+            <label className="field">
+              Số ngày bảo lưu (7–30 ngày) *
+              <input
+                type="number"
+                min={7}
+                max={30}
+                required
+                disabled={busy}
+                value={freezeDays}
+                onChange={(e) => setFreezeDays(Number(e.target.value))}
+              />
+            </label>
+            <label className="field">
+              Ngày bắt đầu bảo lưu *
+              <input
+                type="date"
+                required
+                disabled={busy}
+                min={new Date(Date.now() + 7 * 3600000)
+                  .toISOString()
+                  .slice(0, 10)}
+                max={
+                  new Date(new Date(freezeTarget.endsBefore).getTime() - 86400000)
+                    .toISOString()
+                    .slice(0, 10)
+                }
+                value={freezeStartsOn}
+                onChange={(e) => setFreezeStartsOn(e.target.value)}
+              />
+            </label>
+          </div>
+          <label className="field" style={{ marginTop: 12 }}>
+            Lý do bảo lưu *
+            <textarea
+              maxLength={500}
+              required
+              disabled={busy}
+              value={freezeReason}
+              placeholder="VD: Hội viên đi công tác xa / điều trị chấn thương..."
+              onChange={(e) => setFreezeReason(e.target.value)}
+            />
+          </label>
+          {freezeError && <Notice error>{freezeError}</Notice>}
+          <div className="actions">
+            <button type="submit" className="button primary" disabled={busy}>
+              {busy ? "Đang xử lý…" : "Xác nhận bảo lưu"}
+            </button>
+            <button
+              type="button"
+              className="button outline"
+              disabled={busy}
+              onClick={() => {
+                setFreezeTarget(null);
+                setFreezeError("");
+              }}
+            >
+              Hủy
+            </button>
+          </div>
+        </form>
+      )}
       <section className="panel member-profile" aria-label="Hồ sơ hội viên">
         <header className="member-profile-header">
           <div className="member-profile-identity">
@@ -542,9 +736,13 @@ export function MemberDetail() {
                 .filter((g) =>
                   ["ACTIVE", "SCHEDULED", "FROZEN"].includes(g.status),
                 )
-                .map(
-                  (g) => `${g.packageName} · ${membershipStatuses[g.status]}`,
-                )
+                .map((g) => {
+                  const ptInfo =
+                    (g.ptSessionsRemaining ?? 0) > 0
+                      ? ` · Còn ${g.ptSessionsRemaining} buổi PT`
+                      : "";
+                  return `${g.packageName} · ${membershipStatuses[g.status]}${ptInfo}`;
+                })
                 .join(", ") || "Chưa có gói còn hiệu lực"}
             </dd>
           </div>
@@ -632,53 +830,87 @@ export function MemberDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {m.purchaseHistory.map((purchase) => (
-                    <tr key={purchase.id}>
-                      <td>
-                        <strong>{purchase.packageName}</strong>
-                        <div>{purchase.code}</div>
-                      </td>
-                      <td>{date(purchase.registeredAt)}</td>
-                      <td>
-                        {money(purchase.payment?.amount ?? purchase.price)}
-                      </td>
-                      <td>
-                        <div>
-                          {purchase.payment?.status === "CONFIRMED"
-                            ? "Đã thanh toán"
-                            : purchase.payment?.status === "CANCELLED" ||
-                                purchase.status === "CANCELLED"
-                              ? "Đã hủy"
-                              : "Chờ thanh toán"}
-                        </div>
-                        {purchase.payment && (
+                  {m.purchaseHistory.map((purchase) => {
+                    const paymentLabel =
+                      purchase.payment?.status === "CONFIRMED"
+                        ? "Đã thanh toán"
+                        : purchase.payment?.status === "CANCELLED" ||
+                            purchase.status === "CANCELLED"
+                          ? "Đã hủy"
+                          : "Chờ thanh toán";
+                    const paymentTone =
+                      purchase.payment?.status === "CONFIRMED"
+                        ? "success"
+                        : purchase.payment?.status === "CANCELLED" ||
+                            purchase.status === "CANCELLED"
+                          ? "danger"
+                          : "warning";
+                    const statusTone =
+                      purchase.status === "ACTIVE"
+                        ? "success"
+                        : purchase.status === "FROZEN" ||
+                            purchase.status === "SCHEDULED" ||
+                            purchase.status === "PENDING_PAYMENT"
+                          ? "warning"
+                          : purchase.status === "CANCELLED"
+                            ? "danger"
+                            : "neutral";
+                    return (
+                      <tr key={purchase.id}>
+                        <td>
+                          <span className="cell-primary">
+                            {purchase.packageName}
+                          </span>
+                          <div>{purchase.code}</div>
+                        </td>
+                        <td>
+                          <span className="cell-primary">
+                            {date(purchase.registeredAt)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="cell-primary">
+                            {money(purchase.payment?.amount ?? purchase.price)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="cell-primary">
+                            <Badge tone={paymentTone}>{paymentLabel}</Badge>
+                          </span>
+                          {purchase.payment && (
+                            <div>
+                              {purchase.payment.code} ·{" "}
+                              {purchase.payment.method === "CASH"
+                                ? "Tiền mặt"
+                                : purchase.payment.method}
+                            </div>
+                          )}
+                          {purchase.payment?.confirmedAt && (
+                            <div>
+                              Ngày thu: {date(purchase.payment.confirmedAt)}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <span className="cell-primary">
+                            {date(purchase.startsOn)} –{" "}
+                            {date(
+                              new Date(
+                                new Date(purchase.endsBefore).getTime() -
+                                  86400000,
+                              ).toISOString(),
+                            )}
+                          </span>
                           <div>
-                            {purchase.payment.code} ·{" "}
-                            {purchase.payment.method === "CASH"
-                              ? "Tiền mặt"
-                              : purchase.payment.method}
+                            <Badge tone={statusTone}>
+                              {membershipStatuses[purchase.status] ||
+                                purchase.status}
+                            </Badge>
                           </div>
-                        )}
-                        {purchase.payment?.confirmedAt && (
-                          <div>
-                            Ngày thu: {date(purchase.payment.confirmedAt)}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        {date(purchase.startsOn)} –{" "}
-                        {date(
-                          new Date(
-                            new Date(purchase.endsBefore).getTime() - 86400000,
-                          ).toISOString(),
-                        )}
-                        <div>
-                          {membershipStatuses[purchase.status] ||
-                            purchase.status}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

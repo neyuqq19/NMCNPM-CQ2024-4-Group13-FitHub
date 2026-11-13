@@ -20,13 +20,21 @@ import {
   DEFAULT_API_BASE_URL,
   MobileApiError,
   getMyWorkouts,
+  freezeMyMembership,
+  getMyCheckInSummary,
+  getMyMembershipDetail,
   logoutMobile,
   restoreMobileSession,
   refreshMyMembership,
   setSessionExpiredHandler,
 } from "./src/api";
+import type {
+  MyCheckInSummaryDto,
+  MyMembershipDetailDto,
+} from "@fithub/contracts";
 import { clearSession, loadSession, saveSession } from "./src/session";
 import { HomePanel } from "./src/HomePanel";
+import { PtBookingPanel } from "./src/PtBookingPanel";
 import { CheckInPanel } from "./src/CheckInPanel";
 import { AuthPanel } from "./src/AuthPanel";
 import { WorkoutLogPanel } from "./src/WorkoutLogPanel";
@@ -390,6 +398,33 @@ export default function App() {
       live = false;
     };
   }, [screen, session?.accessToken, apiBaseUrl]);
+
+  const [pkgDetail, setPkgDetail] = useState<MyMembershipDetailDto | null>(
+    null,
+  );
+  const [checkInSummary, setCheckInSummary] =
+    useState<MyCheckInSummaryDto | null>(null);
+  const [pkgBusy, setPkgBusy] = useState(false);
+  const [pkgNotice, setPkgNotice] = useState<string | null>(null);
+
+  async function loadMyPackageData(activeSession: MobileSession) {
+    try {
+      const [detail, summary] = await Promise.all([
+        getMyMembershipDetail(apiBaseUrl, activeSession),
+        getMyCheckInSummary(apiBaseUrl, activeSession).catch(() => null),
+      ]);
+      setPkgDetail(detail);
+      if (summary) setCheckInSummary(summary);
+    } catch {
+      // fallback to session.membership if detail endpoint fails
+    }
+  }
+
+  useEffect(() => {
+    if (session && (screen === "02_MY_PACKAGE" || screen === "05_EXPIRED")) {
+      void loadMyPackageData(session);
+    }
+  }, [screen, session?.accessToken, apiBaseUrl]);
   async function restore() {
     setInitializing(true);
     setRestoreError("");
@@ -568,151 +603,302 @@ export default function App() {
             onNavigate={setScreen}
           />
         )}
+        {screen === "10_TRAINERS" && session && (
+          <PtBookingPanel
+            baseUrl={apiBaseUrl}
+            token={session.accessToken}
+            onBack={() => setScreen("01_HOME")}
+          />
+        )}
 
         {/* =====================================================================
           02 · GÓI TẬP CỦA TÔI
          ===================================================================== */}
-        {screen === "02_MY_PACKAGE" && (
-          <View style={styles.darkScreenRoot}>
-            <ScrollView
-              contentContainerStyle={styles.darkScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <FourDotsHeader
-                title="Gói tập của tôi"
-                onPressDots={() => setScreen("05_EXPIRED")}
-              />
+        {screen === "02_MY_PACKAGE" &&
+          (() => {
+            const summaryPkg = session?.membership || null;
+            const detailPkg = pkgDetail?.activeMembership || null;
+            const totalDays = Math.max(0, summaryPkg?.totalDays ?? 0);
+            const remainingDays = Math.max(0, summaryPkg?.daysRemaining ?? 0);
+            const elapsedDays = Math.max(
+              0,
+              summaryPkg?.daysUsed ?? totalDays - remainingDays,
+            );
+            const pkgName =
+              detailPkg?.packageName ||
+              summaryPkg?.packageName ||
+              "Chưa có gói tập";
+            const fmtDate = (isoOrDate?: string) => {
+              if (!isoOrDate) return "—";
+              if (isoOrDate.includes("/")) return isoOrDate;
+              return isoOrDate.slice(0, 10).split("-").reverse().join("/");
+            };
+            const monthLabel = new Intl.DateTimeFormat("vi-VN", {
+              month: "long",
+              year: "numeric",
+              timeZone: "Asia/Ho_Chi_Minh",
+            }).format(new Date());
+            const sessionsMonth = workoutsThisMonth ?? "–";
+            const ptRem = detailPkg?.ptSessionsRemaining ?? 0;
+            const ptSnap = detailPkg?.ptSessionsSnapshot ?? 0;
+            const frozenUsed = detailPkg?.frozenDaysUsed ?? 0;
+            const frozenLimit = 30;
+            const durationMonths =
+              detailPkg?.durationMonths ?? summaryPkg?.durationMonths ?? 0;
+            const currentStatus = detailPkg?.status || summaryPkg?.state;
+            const canFreezeNow =
+              currentStatus === "ACTIVE" &&
+              durationMonths >= 6 &&
+              frozenLimit - frozenUsed >= 7 &&
+              !!detailPkg?.id;
 
-              <View style={styles.monthRow}>
-                <Text style={styles.monthTitle}>Tháng 11, 2026</Text>
-                <Pressable
-                  style={styles.arrowsPill}
-                  onPress={() => {
-                    setScreen("03_QR_CODE");
-                  }}
+            return (
+              <View style={styles.darkScreenRoot}>
+                <ScrollView
+                  contentContainerStyle={styles.darkScrollContent}
+                  showsVerticalScrollIndicator={false}
                 >
-                  <Text style={styles.arrowsPillText}>‹ ›</Text>
-                </Pressable>
-              </View>
+                  <FourDotsHeader
+                    title="Gói tập của tôi"
+                    onPressDots={() => setScreen("05_EXPIRED")}
+                  />
 
-              <WeekCalendarStrip />
+                  {pkgNotice ? (
+                    <View
+                      style={{
+                        backgroundColor: C.lime,
+                        padding: 12,
+                        borderRadius: 16,
+                        marginBottom: 14,
+                      }}
+                    >
+                      <Text style={{ color: C.ink, fontWeight: "700" }}>
+                        {pkgNotice}
+                      </Text>
+                    </View>
+                  ) : null}
 
-              {/* Banner Lime: Lịch tập hôm nay */}
-              <Pressable
-                style={styles.limeBanner126}
-                onPress={() => {
-                  setScreen("03_QR_CODE");
-                }}
-              >
-                <TopoAndAthleteDecoration
-                  imageUri={SPORTS_IMAGES.runnerCard}
-                  side="right"
-                />
-                <Text style={styles.limeBannerTitle}>Lịch tập hôm nay</Text>
-                <Text style={styles.limeBannerSub}>
-                  Hoàn thành buổi tập trước 21:00
-                </Text>
-                <View style={styles.openQrBlackPill}>
-                  <Text style={styles.openQrBlackPillText}>
-                    Mở thẻ QR vào tập
-                  </Text>
-                </View>
-              </Pressable>
-
-              <FilterTrack
-                labels={["Tổng quan", "Vào cổng", "Gia hạn"]}
-                activeIdx={0}
-                onSelect={(idx) => {
-                  if (idx === 1) {
-                    setScreen("03_QR_CODE");
-                  } else if (idx === 2) {
-                    setScreen("05_EXPIRED");
-                  }
-                }}
-              />
-
-              {/* 2 Mini Cards */}
-              <View style={styles.twoColGrid}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Mở nhật ký tập luyện"
-                  style={[styles.miniCard144, { backgroundColor: C.lilac }]}
-                  onPress={() => setScreen("10_WORKOUT_LOG")}
-                >
-                  <TopoAndAthleteDecoration side="right" />
-                  <Text style={styles.miniCardTitle}>Buổi đã tập</Text>
-                  <Text style={styles.miniCardBigNum}>
-                    {workoutsThisMonth ?? "–"}
-                  </Text>
-                  <Text style={styles.miniCardFoot}>Buổi trong tháng</Text>
-                </Pressable>
-
-                <View
-                  style={[styles.miniCard144, { backgroundColor: C.lavender }]}
-                >
-                  <TopoAndAthleteDecoration side="right" />
-                  <Text style={styles.miniCardTitle}>Mục tiêu gói</Text>
-                  <Text style={styles.miniCardBodyText}>
-                    {"Duy trì đều đặn\nmỗi tuần để đạt kết quả."}
-                  </Text>
-                  <View style={styles.goal96Pill}>
-                    <Text style={styles.goal96Text}>96%</Text>
+                  <View style={styles.monthRow}>
+                    <Text style={styles.monthTitle}>{monthLabel}</Text>
+                    <Pressable
+                      style={styles.arrowsPill}
+                      onPress={() => {
+                        setScreen("03_QR_CODE");
+                      }}
+                    >
+                      <Text style={styles.arrowsPillText}>‹ ›</Text>
+                    </Pressable>
                   </View>
-                </View>
-              </View>
 
-              {/* Donut Card */}
-              <View style={styles.donutCard190}>
-                <View style={{ flex: 1, justifyContent: "space-between" }}>
-                  {[
-                    {
-                      dot: C.lime,
-                      title: "30 Ngày",
-                      sub: "Tổng hạn gói Gym 1 tháng",
-                    },
-                    {
-                      dot: C.lavender,
-                      title: "01 Ngày",
-                      sub: "Đã tập từ 06/11/2026",
-                    },
-                    {
-                      dot: C.lilac,
-                      title: "29 Ngày",
-                      sub: "Còn lại đến 05/12/2026",
-                    },
-                  ].map((item) => (
-                    <View key={item.title} style={styles.donutLegendRow}>
-                      <View
-                        style={[
-                          styles.donutLegendDot,
-                          { backgroundColor: item.dot },
-                        ]}
-                      />
-                      <View>
-                        <Text style={styles.donutLegendTitle}>
-                          {item.title}
+                  <WeekCalendarStrip />
+
+                  {/* Banner Lime: Lịch tập hôm nay */}
+                  <Pressable
+                    style={styles.limeBanner126}
+                    onPress={() => {
+                      setScreen("03_QR_CODE");
+                    }}
+                  >
+                    <TopoAndAthleteDecoration
+                      imageUri={SPORTS_IMAGES.runnerCard}
+                      side="right"
+                    />
+                    <Text style={styles.limeBannerTitle}>{pkgName}</Text>
+                    <Text style={styles.limeBannerSub}>
+                      {summaryPkg?.allowedHoursLabel ||
+                        (detailPkg?.accessWindow === "OFF_PEAK"
+                          ? "Khung giờ tập: 09:00 - 16:00"
+                          : "Khung giờ tập: 05:30 - 22:00")}
+                    </Text>
+                    <View style={styles.openQrBlackPill}>
+                      <Text style={styles.openQrBlackPillText}>
+                        Mở thẻ QR vào tập
+                      </Text>
+                    </View>
+                  </Pressable>
+
+                  <FilterTrack
+                    labels={["Tổng quan", "Vào cổng", "Gia hạn"]}
+                    activeIdx={0}
+                    onSelect={(idx) => {
+                      if (idx === 1) {
+                        setScreen("03_QR_CODE");
+                      } else if (idx === 2) {
+                        setScreen("05_EXPIRED");
+                      }
+                    }}
+                  />
+
+                  {/* 2 Mini Cards */}
+                  <View style={styles.twoColGrid}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Mở nhật ký tập luyện"
+                      onPress={() => setScreen("10_WORKOUT_LOG")}
+                      style={[styles.miniCard144, { backgroundColor: C.lilac }]}
+                    >
+                      <TopoAndAthleteDecoration side="right" />
+                      <Text style={styles.miniCardTitle}>Buổi đã tập</Text>
+                      <Text style={styles.miniCardBigNum}>{sessionsMonth}</Text>
+                      <Text style={styles.miniCardFoot}>
+                        {ptSnap > 0
+                          ? `Còn ${ptRem}/${ptSnap} buổi PT`
+                          : "Buổi trong tháng"}
+                      </Text>
+                    </Pressable>
+
+                    <View
+                      style={[
+                        styles.miniCard144,
+                        { backgroundColor: C.lavender },
+                      ]}
+                    >
+                      <TopoAndAthleteDecoration side="right" />
+                      <Text style={styles.miniCardTitle}>Quyền bảo lưu</Text>
+                      <Text style={styles.miniCardBodyText}>
+                        {currentStatus === "FROZEN"
+                          ? "Gói đang tạm đóng băng bảo lưu."
+                          : durationMonths >= 6
+                            ? `Đã dùng ${frozenUsed}/${frozenLimit} ngày bảo lưu.`
+                            : "Áp dụng cho gói từ 6 tháng trở lên."}
+                      </Text>
+                      <View style={styles.goal96Pill}>
+                        <Text style={styles.goal96Text}>
+                          {totalDays > 0
+                            ? `${Math.round((remainingDays / totalDays) * 100)}%`
+                            : "0%"}
                         </Text>
-                        <Text style={styles.donutLegendSub}>{item.sub}</Text>
                       </View>
                     </View>
-                  ))}
-                </View>
+                  </View>
 
-                {/* Biểu đồ vòng tròn Donut */}
-                <View style={styles.donutOuterRing}>
-                  <View style={styles.donutTopLeftHalf} />
-                  <View style={styles.donutBottomRightHalf} />
-                  <View style={styles.donutInnerHole} />
-                </View>
+                  {/* Donut Card */}
+                  <View style={styles.donutCard190}>
+                    <View style={{ flex: 1, justifyContent: "space-between" }}>
+                      {[
+                        {
+                          dot: C.lime,
+                          title: `${totalDays} Ngày`,
+                          sub: `Tổng hạn ${pkgName}`,
+                        },
+                        {
+                          dot: C.lavender,
+                          title: `${elapsedDays} Ngày`,
+                          sub: `Bắt đầu từ ${fmtDate(detailPkg?.startsOn || summaryPkg?.startsOn)}`,
+                        },
+                        {
+                          dot: C.lilac,
+                          title: `${remainingDays} Ngày`,
+                          sub: `Còn lại đến ${fmtDate(summaryPkg?.endsInclusive || detailPkg?.endsBefore)}`,
+                        },
+                      ].map((item) => (
+                        <View key={item.sub} style={styles.donutLegendRow}>
+                          <View
+                            style={[
+                              styles.donutLegendDot,
+                              { backgroundColor: item.dot },
+                            ]}
+                          />
+                          <View>
+                            <Text style={styles.donutLegendTitle}>
+                              {item.title}
+                            </Text>
+                            <Text style={styles.donutLegendSub}>
+                              {item.sub}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+
+                    {/* Biểu đồ vòng tròn Donut */}
+                    <View style={styles.donutOuterRing}>
+                      <View style={styles.donutTopLeftHalf} />
+                      <View style={styles.donutBottomRightHalf} />
+                      <View style={styles.donutInnerHole} />
+                    </View>
+                  </View>
+
+                  {pkgDetail?.scheduledMembership && (
+                    <View style={[styles.infoDarkCard136, { marginTop: 14 }]}>
+                      <Text style={styles.guideCoralHeading}>
+                        Gói chờ kích hoạt nối tiếp
+                      </Text>
+                      <Text style={styles.guideBodyText}>
+                        {pkgDetail.scheduledMembership.packageName} · Bắt đầu từ{" "}
+                        {fmtDate(pkgDetail.scheduledMembership.startsOn)} đến{" "}
+                        {fmtDate(pkgDetail.scheduledMembership.endsBefore)}.
+                      </Text>
+                    </View>
+                  )}
+
+                  {canFreezeNow && detailPkg && session && (
+                    <Pressable
+                      style={[
+                        styles.limePillButton,
+                        { backgroundColor: C.lime, marginTop: 14 },
+                      ]}
+                      disabled={pkgBusy}
+                      onPress={async () => {
+                        if (!detailPkg.id || pkgBusy) return;
+                        setPkgBusy(true);
+                        setPkgNotice(null);
+                        setErrorMsg(null);
+                        try {
+                          const todayStr = new Intl.DateTimeFormat("en-CA", {
+                            timeZone: "Asia/Ho_Chi_Minh",
+                          }).format(new Date());
+                          await freezeMyMembership(
+                            apiBaseUrl,
+                            session,
+                            detailPkg.id,
+                            {
+                              days: 7,
+                              startsOn: todayStr,
+                              reason:
+                                "Hội viên yêu cầu bảo lưu 7 ngày trên ứng dụng di động",
+                            },
+                          );
+                          const updatedMembership = await refreshMyMembership(
+                            apiBaseUrl,
+                            session,
+                          );
+                          setSession((curr) =>
+                            curr
+                              ? { ...curr, membership: updatedMembership }
+                              : curr,
+                          );
+                          await loadMyPackageData(session);
+                          setPkgNotice(
+                            "Đã kích hoạt bảo lưu gói tập 7 ngày thành công.",
+                          );
+                        } catch (e) {
+                          setErrorMsg(
+                            e instanceof Error
+                              ? e.message
+                              : "Không thể thực hiện bảo lưu gói tập.",
+                          );
+                        } finally {
+                          setPkgBusy(false);
+                        }
+                      }}
+                    >
+                      <Text style={styles.limePillButtonText}>
+                        {pkgBusy
+                          ? "Đang xử lý bảo lưu…"
+                          : "Bảo lưu gói tập (7 ngày)"}
+                      </Text>
+                    </Pressable>
+                  )}
+                </ScrollView>
+
+                <MetaballBottomDock
+                  activeIndex={1}
+                  onSelectTab={handleBottomDockSelect}
+                />
               </View>
-            </ScrollView>
-
-            <MetaballBottomDock
-              activeIndex={1}
-              onSelectTab={handleBottomDockSelect}
-            />
-          </View>
-        )}
+            );
+          })()}
 
         {(
           [
@@ -756,85 +942,129 @@ export default function App() {
         {/* =====================================================================
           05 · GÓI TẬP HẾT HẠN
          ===================================================================== */}
-        {screen === "05_EXPIRED" && (
-          <View style={styles.darkScreenRoot}>
-            <ScrollView
-              contentContainerStyle={styles.darkScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={{ color: C.mutedOnDark, marginBottom: 16 }}>
-                Bản xem thử: lịch tập và biểu đồ gói tập là dữ liệu minh họa.
-                Quyền check-in được kiểm tra trực tiếp trên hệ thống.
-              </Text>
-              <FourDotsHeader
-                title="Gói tập của tôi"
-                onPressDots={() => setScreen("02_MY_PACKAGE")}
-              />
-
-              <View style={[styles.heroCard188, { backgroundColor: C.coral }]}>
-                <TopoAndAthleteDecoration
-                  imageUri={SPORTS_IMAGES.runnerCard}
-                  side="right"
-                />
-                <WhiteCircleBadge bigText="0" smallText="ngày" />
-                <Text style={[styles.heroCardSubLabel, { color: C.ink }]}>
-                  Trạng thái hội viên
-                </Text>
-                <Text style={styles.heroCardMainTitle}>Gói tập đã hết hạn</Text>
-                <Text style={[styles.heroCardMeta, { color: C.ink }]}>
-                  Gói Gym 1 tháng kết thúc ngày 05/11
-                </Text>
-                <View style={styles.heroPillAnchor188}>
-                  <BlackMetricPill
-                    mainVal="05/11"
-                    subVal="ĐÃ KẾT THÚC"
-                    accentHex={C.coral}
+        {screen === "05_EXPIRED" &&
+          (() => {
+            const summaryPkg = session?.membership || null;
+            const detailPkg = pkgDetail?.activeMembership || null;
+            const endShort = summaryPkg?.endsInclusive
+              ? summaryPkg.endsInclusive.slice(0, 5)
+              : detailPkg?.endsBefore
+                ? detailPkg.endsBefore
+                    .slice(5, 10)
+                    .split("-")
+                    .reverse()
+                    .join("/")
+                : "—";
+            const currentStatus = detailPkg?.status || summaryPkg?.state;
+            const pkgName =
+              detailPkg?.packageName || summaryPkg?.packageName || "";
+            const pkgCode =
+              detailPkg?.code || summaryPkg?.membershipCode || "Chưa có";
+            return (
+              <View style={styles.darkScreenRoot}>
+                <ScrollView
+                  contentContainerStyle={styles.darkScrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <FourDotsHeader
+                    title="Gói tập của tôi"
+                    onPressDots={() => setScreen("02_MY_PACKAGE")}
                   />
-                </View>
+
+                  <View
+                    style={[styles.heroCard188, { backgroundColor: C.coral }]}
+                  >
+                    <TopoAndAthleteDecoration
+                      imageUri={SPORTS_IMAGES.runnerCard}
+                      side="right"
+                    />
+                    <WhiteCircleBadge
+                      bigText={String(summaryPkg?.daysRemaining ?? 0)}
+                      smallText="ngày"
+                    />
+                    <Text style={[styles.heroCardSubLabel, { color: C.ink }]}>
+                      Trạng thái hội viên
+                    </Text>
+                    <Text style={styles.heroCardMainTitle}>
+                      {currentStatus === "ACTIVE"
+                        ? "Thông tin gia hạn gói"
+                        : "Gói tập đã hết hạn"}
+                    </Text>
+                    <Text style={[styles.heroCardMeta, { color: C.ink }]}>
+                      {pkgName
+                        ? `${pkgName} · hạn ${endShort}`
+                        : "Chưa có gói tập đang hoạt động"}
+                    </Text>
+                    <View style={styles.heroPillAnchor188}>
+                      <BlackMetricPill
+                        mainVal={endShort}
+                        subVal={
+                          currentStatus === "ACTIVE"
+                            ? "NGÀY KẾT THÚC"
+                            : "ĐÃ KẾT THÚC"
+                        }
+                        accentHex={C.coral}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.twoColGrid}>
+                    <View
+                      style={[styles.miniCard134, { backgroundColor: C.lilac }]}
+                    >
+                      <Text style={styles.miniCardTitle}>Gói hiện tại</Text>
+                      <Text style={styles.miniCardBigNum24}>{pkgCode}</Text>
+                      <Text style={styles.miniCardFoot}>
+                        {pkgName || "Liên hệ lễ tân"}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.miniCard134,
+                        { backgroundColor: C.lavender },
+                      ]}
+                    >
+                      <Text style={styles.miniCardTitle}>Buổi trong tháng</Text>
+                      <Text style={styles.miniCardBigNum24}>
+                        {checkInSummary?.sessionsThisMonth ??
+                          summaryPkg?.sessionsThisMonth ??
+                          0}{" "}
+                        Buổi
+                      </Text>
+                      <Text style={styles.miniCardFoot}>Chu kỳ hiện tại</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.infoDarkCard136}>
+                    <Text style={styles.guideCoralHeading}>
+                      Gia hạn trực tiếp tại quầy lễ tân
+                    </Text>
+                    <Text style={styles.guideBodyText}>
+                      Vui lòng gặp nhân viên lễ tân để gia hạn gói tập mới. Thẻ
+                      vào phòng tập sẽ tự động kích hoạt lại ngay sau khi thanh
+                      toán.
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    style={[
+                      styles.limePillButton,
+                      { backgroundColor: C.lavender },
+                    ]}
+                    onPress={() => setScreen("01_HOME")}
+                  >
+                    <Text style={styles.limePillButtonText}>Về trang chủ</Text>
+                  </Pressable>
+                </ScrollView>
+
+                <MetaballBottomDock
+                  activeIndex={1}
+                  onSelectTab={handleBottomDockSelect}
+                />
               </View>
-
-              <View style={styles.twoColGrid}>
-                <View
-                  style={[styles.miniCard134, { backgroundColor: C.lilac }]}
-                >
-                  <Text style={styles.miniCardTitle}>Gói vừa dùng</Text>
-                  <Text style={styles.miniCardBigNum24}>Gym 1T</Text>
-                  <Text style={styles.miniCardFoot}>500.000đ / 30 ngày</Text>
-                </View>
-
-                <View
-                  style={[styles.miniCard134, { backgroundColor: C.lavender }]}
-                >
-                  <Text style={styles.miniCardTitle}>Tổng buổi tập</Text>
-                  <Text style={styles.miniCardBigNum24}>24 Buổi</Text>
-                  <Text style={styles.miniCardFoot}>Hoàn thành chu kỳ</Text>
-                </View>
-              </View>
-
-              <View style={styles.infoDarkCard136}>
-                <Text style={styles.guideCoralHeading}>
-                  Gia hạn trực tiếp tại quầy lễ tân
-                </Text>
-                <Text style={styles.guideBodyText}>
-                  Vui lòng gặp nhân viên lễ tân để gia hạn gói tập mới. Thẻ vào
-                  phòng tập sẽ tự động kích hoạt lại ngay sau khi thanh toán.
-                </Text>
-              </View>
-
-              <Pressable
-                style={[styles.limePillButton, { backgroundColor: C.lavender }]}
-                onPress={() => setScreen("01_HOME")}
-              >
-                <Text style={styles.limePillButtonText}>Về trang chủ</Text>
-              </Pressable>
-            </ScrollView>
-
-            <MetaballBottomDock
-              activeIndex={1}
-              onSelectTab={handleBottomDockSelect}
-            />
-          </View>
-        )}
+            );
+          })()}
 
         {/* =====================================================================
           10 · NHẬT KÝ TẬP LUYỆN (UC13)

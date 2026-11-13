@@ -180,6 +180,13 @@ export function HomePanel({
           )}
         </Pressable>
         <Text style={s.section}>Truy cập nhanh</Text>
+        <Pressable
+          accessibilityRole="button"
+          style={[s.button, { marginBottom: 12 }]}
+          onPress={() => onNavigate("10_TRAINERS")}
+        >
+          <Text style={s.buttonText}>Tìm huấn luyện viên</Text>
+        </Pressable>
         <View style={[s.card, { backgroundColor: "#C2B3FA" }]}>
           <Text style={s.title}>Mã QR vào phòng tập</Text>
           <View style={s.qrInner}>

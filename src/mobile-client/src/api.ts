@@ -203,7 +203,8 @@ export const getMyCheckInSummary = (baseUrl: string, session: MobileSession) =>
   );
 
 // ===== UC13 — Nhật ký tập luyện =====
-type WorkoutHistoryResponse = import("@fithub/contracts").WorkoutHistoryResponse;
+type WorkoutHistoryResponse =
+  import("@fithub/contracts").WorkoutHistoryResponse;
 type WorkoutSessionDto = import("@fithub/contracts").WorkoutSessionDto;
 type PersonalRecordDto = import("@fithub/contracts").PersonalRecordDto;
 type CreateWorkoutSessionRequest =
@@ -253,5 +254,32 @@ export const deleteWorkout = (
     baseUrl,
     `/api/workouts/${id}`,
     { method: "DELETE" },
+    session.accessToken,
+  );
+
+export const getMyMembershipDetail = (
+  baseUrl: string,
+  session: MobileSession,
+) =>
+  mobileRequest<import("@fithub/contracts").MyMembershipDetailDto>(
+    baseUrl,
+    "/api/memberships/my/detail",
+    {},
+    session.accessToken,
+  );
+
+export const freezeMyMembership = (
+  baseUrl: string,
+  session: MobileSession,
+  membershipId: string,
+  body: import("@fithub/contracts").FreezeMembershipRequest,
+) =>
+  mobileRequest<import("@fithub/contracts").FreezeMembershipResponse>(
+    baseUrl,
+    `/api/memberships/${membershipId}/freeze`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
     session.accessToken,
   );

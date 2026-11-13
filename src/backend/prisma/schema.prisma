@@ -73,10 +73,12 @@ model User {
   sessions            Session[]
   authEvents          AuthEvent[]
   emailVerification   EmailVerification?
+  trainerProfile      TrainerProfile?
   memberProfile       MemberProfile?
   confirmedPayments   Payment[]          @relation("PaymentConfirmer")
   auditLogs           AuditLog[]
   scanners            CheckInScanner[]
+  createdFreezes      FreezePeriod[]     @relation("FreezeCreator")
 }
 
 model Session {
@@ -109,6 +111,7 @@ model AuthEvent {
 }
 
 model MemberProfile {
+  bookedTrainerSlots WorkingSlot[]
   id            String          @id @default(uuid()) @db.Uuid
   userId        String          @unique @db.Uuid
   user          User            @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -131,17 +134,18 @@ model MemberProfile {
 }
 
 model Package {
-  id              String       @id @default(uuid()) @db.Uuid
-  code            String       @unique
-  name            String
-  durationMonths  Int
-  price           Decimal      @db.Decimal(12, 0)
-  grantsGymAccess Boolean      @default(true)
-  isActive        Boolean      @default(true)
-  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime     @updatedAt @db.Timestamptz(3)
-  accessWindow    AccessWindow @default(REGULAR)
-  memberships     Membership[]
+  id                 String       @id @default(uuid()) @db.Uuid
+  code               String       @unique
+  name               String
+  durationMonths     Int
+  price              Decimal      @db.Decimal(12, 0)
+  grantsGymAccess    Boolean      @default(true)
+  ptSessionsIncluded Int          @default(0)
+  isActive           Boolean      @default(true)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
+  accessWindow       AccessWindow @default(REGULAR)
+  memberships        Membership[]
 }
 
 model Membership {
@@ -158,6 +162,8 @@ model Membership {
   priceSnapshot           Decimal          @db.Decimal(12, 0)
   accessWindowSnapshot    AccessWindow     @default(REGULAR)
   grantsGymAccessSnapshot Boolean
+  ptSessionsSnapshot      Int              @default(0)
+  ptSessionsRemaining     Int              @default(0)
   status                  MembershipStatus @default(PENDING_PAYMENT)
   // Local gym calendar dates; startsOn inclusive, endsBefore exclusive.
   startsOn                DateTime         @db.Date
@@ -167,6 +173,7 @@ model Membership {
   updatedAt               DateTime         @updatedAt @db.Timestamptz(3)
   payment                 Payment?
   checkIns                CheckInRecord[]
+  freezePeriods           FreezePeriod[]
 
   @@index([memberId, status])
 }
@@ -352,4 +359,80 @@ model PersonalRecord {
   updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
 
   @@unique([memberId, exerciseKey])
+enum FreezeStatus {
+  ACTIVE
+  ENDED
+}
+
+model FreezePeriod {
+  id           String       @id @default(uuid()) @db.Uuid
+  membershipId String       @db.Uuid
+  membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  startsOn     DateTime     @db.Date
+  endsBefore   DateTime     @db.Date
+  days         Int
+  reason       String
+  status       FreezeStatus @default(ACTIVE)
+  createdById  String       @db.Uuid
+  createdBy    User         @relation("FreezeCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  endedAt      DateTime?    @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([membershipId, status])
+enum TrainerWorkStatus {
+  ACTIVE
+  ON_LEAVE
+}
+
+model TrainerProfile {
+  workStatus      TrainerWorkStatus      @default(ACTIVE)
+  workingSlots    WorkingSlot[]
+  id              String                 @id @default(uuid()) @db.Uuid
+  userId          String                 @unique @db.Uuid
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainerCode     String                 @unique
+  bio             String                 @default("")
+  specialties     String[]               @default([])
+  experienceYears Int                    @default(0)
+  avatarUrl       String?
+  version         Int                    @default(0)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime               @updatedAt @db.Timestamptz(3)
+  certifications  TrainerCertification[]
+}
+
+model TrainerCertification {
+  id            String         @id @default(uuid()) @db.Uuid
+  trainerId     String         @db.Uuid
+  trainer       TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  name          String
+  issuer        String
+  issuedAt      DateTime       @db.Date
+  credentialUrl String?
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([trainerId])
+}
+
+enum WorkingSlotStatus {
+  OPEN
+  BOOKED
+  UNAVAILABLE
+}
+
+model WorkingSlot {
+  id                String            @id @default(uuid()) @db.Uuid
+  trainerId         String            @db.Uuid
+  trainer           TrainerProfile    @relation(fields: [trainerId], references: [id], onDelete: Restrict)
+  workDate          DateTime          @db.Date
+  startTime         DateTime          @db.Timestamptz(3)
+  endTime           DateTime          @db.Timestamptz(3)
+  status            WorkingSlotStatus @default(OPEN)
+  unavailableReason String?
+  memberId          String?           @db.Uuid
+  member            MemberProfile?    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@unique([trainerId, workDate, startTime])
+  @@unique([trainerId, startTime])
 }

@@ -62,13 +62,15 @@ export function AdminLogin({
       });
       if (result.accessToken)
         sessionStorage.setItem("fithub_token", result.accessToken);
-      if (result.user.role !== "ADMIN") {
+      if (result.user.role !== "ADMIN" && result.user.role !== "TRAINER") {
         try {
           await apiService.logout();
         } finally {
           sessionStorage.removeItem("fithub_token");
         }
-        throw new Error("Chỉ Admin có quyền quản lý hội viên.");
+        throw new Error(
+          "Cổng nhân viên dành cho quản trị viên và huấn luyện viên.",
+        );
       }
       onLogin(result.user);
     } catch (e) {
@@ -119,8 +121,8 @@ export function AdminLogin({
             aria-busy={busy}
           >
             <header className="admin-login-heading">
-              <p className="admin-login-eyebrow">FITHUB ADMIN</p>
-              <h1 id="admin-login-title">Đăng nhập quản trị</h1>
+              <p className="admin-login-eyebrow">FITHUB</p>
+              <h1 id="admin-login-title">Đăng nhập nhân viên</h1>
               <p>Đăng nhập để bắt đầu ca làm việc.</p>
             </header>
             <div className="admin-login-fields">
@@ -234,7 +236,7 @@ export function AdminLogin({
             </div>
           </form>
           <p className="admin-login-footnote">
-            Dành cho tài khoản quản trị được cấp.
+            Dành cho quản trị viên và huấn luyện viên.
           </p>
         </section>
       </div>

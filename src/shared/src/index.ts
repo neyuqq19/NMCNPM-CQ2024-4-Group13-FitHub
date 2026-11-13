@@ -1,4 +1,5 @@
 export * from "./constants";
+export * from "./working-slots";
 
 export type Role = "ADMIN" | "TRAINER" | "MEMBER";
 export type Platform = "WEB" | "MOBILE";
@@ -42,6 +43,8 @@ export interface PackageDto {
   durationMonths: number;
   price: number;
   grantsGymAccess: boolean;
+  ptSessionsIncluded?: number;
+  isActive?: boolean;
 }
 
 export interface MemberDto {
@@ -92,6 +95,8 @@ export interface MembershipSummary {
   status: string;
   startsOn: string;
   endsBefore: string;
+  durationMonths?: number;
+  ptSessionsRemaining?: number;
 }
 export interface PackagePurchaseDto extends MembershipSummary {
   registeredAt: string;
@@ -276,7 +281,12 @@ export interface MyCheckInSummaryDto {
 
 /** W = khởi động, R = hiệp chính, D = drop set, F = tới ngưỡng thất bại. */
 export type WorkoutSetType = "W" | "R" | "D" | "F";
-export const WORKOUT_SET_TYPES: readonly WorkoutSetType[] = ["W", "R", "D", "F"];
+export const WORKOUT_SET_TYPES: readonly WorkoutSetType[] = [
+  "W",
+  "R",
+  "D",
+  "F",
+];
 export const WORKOUT_LIMITS = {
   repsMax: 500,
   weightKgMax: 1000,
@@ -378,4 +388,136 @@ export interface PersonalRecordDto {
   /** True once a later session beat the baseline. */
   isPR: boolean;
   updatedAt: string;
+}
+
+export type FreezeStatus = "ACTIVE" | "ENDED";
+
+export interface FreezePeriodDto {
+  id: string;
+  membershipId: string;
+  startsOn: string;
+  endsBefore: string;
+  days: number;
+  reason: string;
+  status: FreezeStatus;
+  endedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreatePackageRequest {
+  code: string;
+  name: string;
+  durationMonths: 1 | 3 | 6 | 12;
+  price: number;
+  accessWindow?: "REGULAR" | "OFF_PEAK";
+  grantsGymAccess?: boolean;
+  ptSessionsIncluded?: number;
+  isActive?: boolean;
+}
+
+export interface UpdatePackageRequest {
+  name?: string;
+  durationMonths?: 1 | 3 | 6 | 12;
+  price?: number;
+  accessWindow?: "REGULAR" | "OFF_PEAK";
+  grantsGymAccess?: boolean;
+  ptSessionsIncluded?: number;
+  isActive?: boolean;
+}
+
+export interface FreezeMembershipRequest {
+  days: number;
+  reason: string;
+  startsOn?: string;
+}
+
+export interface FreezeMembershipResponse {
+  membership: MembershipSummary & {
+    durationMonths: number;
+    ptSessionsRemaining: number;
+    frozenDaysUsed: number;
+    freezePeriods: FreezePeriodDto[];
+  };
+  shiftedScheduledMembership: MembershipSummary | null;
+}
+
+export interface MyMembershipDetailDto {
+  hasProfile: boolean;
+  memberCode: string | null;
+  activeMembership:
+    | (MembershipSummary & {
+        durationMonths: number;
+        accessWindow: "REGULAR" | "OFF_PEAK";
+        grantsGymAccess: boolean;
+        ptSessionsSnapshot: number;
+        ptSessionsRemaining: number;
+        frozenDaysUsed: number;
+        freezePeriods: FreezePeriodDto[];
+      })
+    | null;
+  scheduledMembership:
+    | (MembershipSummary & {
+        durationMonths: number;
+        accessWindow: "REGULAR" | "OFF_PEAK";
+        grantsGymAccess: boolean;
+        ptSessionsSnapshot: number;
+        ptSessionsRemaining: number;
+      })
+    | null;
+  recentMemberships: (MembershipSummary & {
+    durationMonths: number;
+    price: number;
+  })[];
+}
+
+export type TrainerWorkStatus = "ACTIVE" | "ON_LEAVE";
+
+export interface TrainerSummaryDto {
+  workStatus: TrainerWorkStatus;
+  id: string;
+  userId: string;
+  trainerCode: string;
+  displayName: string;
+  email: string | null;
+  phone: string | null;
+  accountStatus: AccountStatus;
+  avatarUrl: string | null;
+  specialties: string[];
+  experienceYears: number;
+  certificationCount: number;
+}
+
+export interface TrainerListResponse {
+  items: TrainerSummaryDto[];
+}
+
+export interface TrainerCertificationDto {
+  id: string;
+  name: string;
+  issuer: string;
+  issuedAt: string;
+  credentialUrl: string | null;
+}
+
+export interface TrainerProfileDto extends TrainerSummaryDto {
+  bio: string;
+  version: number;
+  certifications: TrainerCertificationDto[];
+}
+
+export interface UpdateTrainerProfileRequest {
+  workStatus?: TrainerWorkStatus;
+  bio: string;
+  specialties: string[];
+  experienceYears: number;
+  avatarUrl?: string | null;
+  version: number;
+}
+
+export interface CreateCertificationRequest {
+  name: string;
+  issuer: string;
+  issuedAt: string;
+  credentialUrl?: string | null;
+  version: number;
 }
