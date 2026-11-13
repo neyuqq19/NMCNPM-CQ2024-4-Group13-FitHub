@@ -24,16 +24,6 @@ CREATE TYPE "ReconciliationStatus" AS ENUM ('RECONCILED', 'MISMATCHED', 'NONE');
 ALTER TYPE "PaymentMethod" ADD VALUE 'BANK_TRANSFER';
 ALTER TYPE "PaymentMethod" ADD VALUE 'VNPAY';
 
--- AlterTable
-ALTER TABLE "Equipment" ALTER COLUMN "id" DROP DEFAULT,
-ALTER COLUMN "updatedAt" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "EquipmentHistory" ALTER COLUMN "id" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "EquipmentIncident" ALTER COLUMN "id" DROP DEFAULT,
-ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable
 ALTER TABLE "Payment" ADD COLUMN     "benefitStatus" "BenefitStatus" NOT NULL DEFAULT 'GRANTED',
