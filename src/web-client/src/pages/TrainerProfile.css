@@ -1,0 +1,79 @@
+.trainer-profile,
+.trainer-profile .field,
+.trainer-profile :is(input, textarea, select, option),
+.trainer-profile :is(input, textarea, select):focus {
+  color: #172033;
+}
+.trainer-profile :is(input, textarea)::placeholder,
+.trainer-hint {
+  color: #526174;
+}
+.trainer-profile h3,
+.trainer-profile legend {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.trainer-identity,
+.trainer-photo-field,
+.cert-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.trainer-identity {
+  margin-bottom: 20px;
+  overflow-wrap: anywhere;
+}
+.trainer-identity h2,
+.trainer-identity p {
+  margin-bottom: 0;
+}
+.trainer-photo-field {
+  margin-bottom: 18px;
+}
+.trainer-photo-field .field {
+  flex: 1 1 220px;
+}
+.trainer-avatar-preview {
+  display: grid;
+  gap: 4px;
+  max-width: 200px;
+}
+.trainer-initials {
+  display: grid;
+  place-items: center;
+  background: #e1f2ee;
+  color: #15534b;
+  font-size: 24px;
+  font-weight: 600;
+}
+.trainer-profile .trainer-specialty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  max-width: 34rem;
+  gap: 10px;
+}
+.trainer-profile .cert-form {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.cert-form legend {
+  padding: 0 6px;
+}
+.trainer-profile .cert-actions {
+  gap: 8px;
+}
+.trainer-profile .cert-actions button[aria-label^="Xóa"] {
+  color: #a32222;
+  border-color: #b45555;
+}
+.trainer-profile .trainer-tags {
+  margin-bottom: 12px;
+}
+.trainer-profile td a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

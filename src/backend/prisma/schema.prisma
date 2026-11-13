@@ -73,6 +73,7 @@ model User {
   sessions            Session[]
   authEvents          AuthEvent[]
   emailVerification   EmailVerification?
+  trainerProfile      TrainerProfile?
   memberProfile       MemberProfile?
   confirmedPayments   Payment[]          @relation("PaymentConfirmer")
   auditLogs           AuditLog[]
@@ -113,6 +114,7 @@ model AuthEvent {
 }
 
 model MemberProfile {
+  bookedTrainerSlots WorkingSlot[]
   id            String          @id @default(uuid()) @db.Uuid
   userId        String          @unique @db.Uuid
   user          User            @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -130,6 +132,8 @@ model MemberProfile {
   memberships   Membership[]
   checkInQrs    CheckInQr[]
   checkIns      CheckInRecord[]
+  workoutSessions WorkoutSession[]
+  personalRecords PersonalRecord[]
 }
 
 model Package {
@@ -283,6 +287,81 @@ model CheckInRecord {
   @@index([memberId, checkedInAt])
 }
 
+// ===== UC13 — Nhật ký tập luyện (SAD 4.9, UCSpec 3.4.4) =====
+
+// W = khởi động, R = hiệp chính, D = drop set, F = tới ngưỡng thất bại.
+enum WorkoutSetType {
+  W
+  R
+  D
+  F
+}
+
+model WorkoutSession {
+  id              String            @id @default(uuid()) @db.Uuid
+  memberId        String            @db.Uuid
+  member          MemberProfile     @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  title           String
+  // Local gym calendar date (Asia/Ho_Chi_Minh).
+  performedOn     DateTime          @db.Date
+  durationMinutes Int?
+  notes           String?
+  // BR01: sum of reps * weightKg over every set in the session.
+  totalVolume     Decimal           @default(0) @db.Decimal(12, 2)
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(3)
+  exercises       WorkoutExercise[]
+
+  @@index([memberId, performedOn])
+}
+
+model WorkoutExercise {
+  id           String         @id @default(uuid()) @db.Uuid
+  sessionId    String         @db.Uuid
+  session      WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseName String
+  // Lower-cased, whitespace-collapsed name; records are matched on this key.
+  exerciseKey  String
+  orderIndex   Int
+  sets         WorkoutSet[]
+
+  @@unique([sessionId, exerciseKey])
+  @@index([exerciseKey])
+}
+
+model WorkoutSet {
+  id           String          @id @default(uuid()) @db.Uuid
+  exerciseId   String          @db.Uuid
+  exercise     WorkoutExercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  setNumber    Int
+  setType      WorkoutSetType
+  reps         Int
+  weightKg     Decimal         @db.Decimal(6, 2)
+  // BR02/BR03: only R sets with external load get an Epley estimate.
+  estimated1RM Decimal?        @db.Decimal(8, 2)
+  isPR         Boolean         @default(false)
+
+  @@unique([exerciseId, setNumber])
+}
+
+model PersonalRecord {
+  id           String        @id @default(uuid()) @db.Uuid
+  memberId     String        @db.Uuid
+  member       MemberProfile @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  exerciseName String
+  exerciseKey  String
+  oneRepMax    Decimal       @db.Decimal(8, 2)
+  weightKg     Decimal       @db.Decimal(6, 2)
+  reps         Int
+  achievedOn   DateTime      @db.Date
+  // Set that holds the record. Rebuilt whenever sessions change, so no FK.
+  setId        String        @db.Uuid
+  // BR04: true while the first session's best has never been beaten.
+  isBaseline   Boolean       @default(true)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@unique([memberId, exerciseKey])
 enum FreezeStatus {
   ACTIVE
   ENDED
@@ -304,6 +383,61 @@ model FreezePeriod {
   updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([membershipId, status])
+enum TrainerWorkStatus {
+  ACTIVE
+  ON_LEAVE
+}
+
+model TrainerProfile {
+  workStatus      TrainerWorkStatus      @default(ACTIVE)
+  workingSlots    WorkingSlot[]
+  id              String                 @id @default(uuid()) @db.Uuid
+  userId          String                 @unique @db.Uuid
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainerCode     String                 @unique
+  bio             String                 @default("")
+  specialties     String[]               @default([])
+  experienceYears Int                    @default(0)
+  avatarUrl       String?
+  version         Int                    @default(0)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime               @updatedAt @db.Timestamptz(3)
+  certifications  TrainerCertification[]
+}
+
+model TrainerCertification {
+  id            String         @id @default(uuid()) @db.Uuid
+  trainerId     String         @db.Uuid
+  trainer       TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  name          String
+  issuer        String
+  issuedAt      DateTime       @db.Date
+  credentialUrl String?
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([trainerId])
+}
+
+enum WorkingSlotStatus {
+  OPEN
+  BOOKED
+  UNAVAILABLE
+}
+
+model WorkingSlot {
+  id                String            @id @default(uuid()) @db.Uuid
+  trainerId         String            @db.Uuid
+  trainer           TrainerProfile    @relation(fields: [trainerId], references: [id], onDelete: Restrict)
+  workDate          DateTime          @db.Date
+  startTime         DateTime          @db.Timestamptz(3)
+  endTime           DateTime          @db.Timestamptz(3)
+  status            WorkingSlotStatus @default(OPEN)
+  unavailableReason String?
+  memberId          String?           @db.Uuid
+  member            MemberProfile?    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@unique([trainerId, workDate, startTime])
+  @@unique([trainerId, startTime])
 }
 
 enum EquipmentCategory {

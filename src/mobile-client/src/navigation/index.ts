@@ -16,4 +16,5 @@ export const APP_ROUTES: RouteConfig[] = [
   { id: '07_QR_EXPIRED', title: 'Mã QR hết hiệu lực' },
   { id: '08_VERIFYING', title: 'Đang xác thực' },
   { id: '09_PROFILE', title: 'Hồ sơ hội viên' },
+  { id: '10_TRAINERS', title: 'Huấn luyện viên' },
 ];

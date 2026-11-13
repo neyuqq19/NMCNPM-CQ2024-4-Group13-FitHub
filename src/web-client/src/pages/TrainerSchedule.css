@@ -1,0 +1,234 @@
+.schedule-panel {
+  --axis-width: 3.2rem;
+}
+.schedule-head,
+.schedule-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.schedule-head h2,
+.schedule-dialog-head h2 {
+  margin: 0;
+}
+.schedule-head h2 small {
+  display: block;
+  margin-top: 0.35rem;
+  color: #475569;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.schedule-nav {
+  margin: 1rem 0;
+}
+.schedule-nav .field {
+  margin-left: auto;
+}
+.schedule-days,
+.schedule-grid {
+  display: grid;
+  grid-template-columns: var(--axis-width) repeat(7, minmax(0, 1fr));
+}
+.schedule-days::before {
+  content: "";
+}
+.schedule-days button {
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  padding: 0.4rem 0.1rem;
+  color: #34465c;
+  min-height: 48px;
+  cursor: pointer;
+}
+.schedule-days button > * {
+  display: block;
+}
+.schedule-days button[aria-pressed="true"] {
+  border-color: #368064;
+  background: #edf7f1;
+}
+.schedule-days button[aria-current="date"] {
+  color: #145335;
+}
+.schedule-count {
+  font-variant-numeric: tabular-nums;
+}
+.schedule-days button small {
+  font-size: 0.7rem;
+}
+.schedule-grid {
+  margin: 0.6rem 0 1rem;
+}
+.schedule-hours,
+.schedule-column {
+  position: relative;
+  height: 72rem;
+}
+.schedule-hours span {
+  position: absolute;
+  right: 0.4rem;
+  transform: translateY(-50%);
+  font-size: 0.72rem;
+  color: #536278;
+}
+.schedule-column {
+  min-width: 0;
+  border: 1px solid #d9e2ea;
+  border-right: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    #d9e2ea 0 1px,
+    transparent 1px 6.25%
+  );
+}
+.schedule-column:last-child {
+  border-right: 1px solid #d9e2ea;
+}
+.schedule-column.is-today {
+  background-color: #f0faf4;
+}
+.schedule-elapsed {
+  position: absolute;
+  inset: 0 0 auto;
+  background: rgb(101 116 137 / 11%);
+  pointer-events: none;
+}
+.schedule-empty {
+  position: relative;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #586678;
+  margin: 0.5rem 0.1rem;
+}
+.schedule-slot,
+.schedule-badge {
+  background: var(--slot-bg);
+  color: var(--slot-fg);
+  border-radius: 0.4rem;
+}
+.schedule-slot {
+  position: absolute;
+  inset-inline: 2px;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--slot-accent);
+  border-left-width: 3px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+.schedule-slot > * {
+  max-width: 100%;
+  overflow: hidden;
+}
+.schedule-slot small {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: inherit;
+}
+.schedule-badge {
+  display: inline-block;
+  padding: 0.3rem 0.6rem;
+  font-weight: 600;
+}
+.tone-OPEN {
+  --slot-bg: #e5f5ea;
+  --slot-fg: #145234;
+  --slot-accent: #53976b;
+}
+.tone-BOOKED {
+  --slot-bg: #e7f0ff;
+  --slot-fg: #174677;
+  --slot-accent: #5588cd;
+}
+.tone-UNAVAILABLE {
+  --slot-bg: #fff0df;
+  --slot-fg: #77410a;
+  --slot-accent: #c67529;
+}
+.tone-STARTED,
+.tone-PAST {
+  --slot-bg: #edf0f3;
+  --slot-fg: #495766;
+  --slot-accent: #83909d;
+}
+.schedule-dialog {
+  max-height: 90dvh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.schedule-dialog-head {
+  margin-bottom: 1rem;
+}
+.schedule-dialog-head .button {
+  padding: 0.3rem 0.75rem;
+  font-size: 1.25rem;
+}
+.schedule-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.schedule-times input {
+  width: 100%;
+}
+@media (max-width: 800px) {
+  .schedule-panel {
+    min-width: 0;
+  }
+  .schedule-nav .field {
+    margin-left: 0;
+  }
+  .schedule-days {
+    display: flex;
+    overflow-x: auto;
+    gap: 0.3rem;
+    position: relative;
+    padding: 0.2rem;
+  }
+  .schedule-days::before,
+  .schedule-hours,
+  .schedule-column,
+  .schedule-elapsed {
+    display: none;
+  }
+  .schedule-days button {
+    flex: 0 0 4.9rem;
+    border-color: #d9e2ea;
+  }
+  .schedule-grid {
+    display: block;
+  }
+  .schedule-column.is-selected {
+    display: grid;
+    gap: 0.6rem;
+    padding: 0.6rem;
+    border: 1px solid #d9e2ea;
+    border-radius: 0.5rem;
+    height: auto;
+    background-image: none;
+  }
+  .schedule-column.is-past {
+    background-color: #f1f3f5;
+  }
+  .schedule-slot {
+    position: static;
+    height: auto !important;
+    min-height: 3.4rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.88rem;
+  }
+  .schedule-slot small {
+    white-space: normal;
+  }
+}
