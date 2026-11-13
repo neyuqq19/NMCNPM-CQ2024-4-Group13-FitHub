@@ -158,17 +158,19 @@ function Shell({
                  <Users size={22} />
                  {!collapsed && <span>Hội viên</span>}
               </NavLink>
-              
+
               <NavLink to="/packages" title={collapsed ? "Gói tập" : undefined}>
-                 <Package size={22} />
-                 {!collapsed && <span>Gói tập</span>}
-              </NavLink>
-              
-              <NavLink to="/equipments" title={collapsed ? "Thiết bị" : undefined}>
-                 <Dumbbell size={22} />
-                 {!collapsed && <span>Thiết bị</span>}
+                <Package size={22} />
+                {!collapsed && <span>Gói tập</span>}
               </NavLink>
 
+              <NavLink
+                to="/equipments"
+                title={collapsed ? "Thiết bị" : undefined}
+              >
+                <Dumbbell size={22} />
+                {!collapsed && <span>Thiết bị</span>}
+              </NavLink>
               <NavLink
                 to="/check-in"
                 title={collapsed ? "Check-in" : undefined}

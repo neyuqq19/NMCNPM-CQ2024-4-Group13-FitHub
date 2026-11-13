@@ -202,6 +202,61 @@ export const getMyCheckInSummary = (baseUrl: string, session: MobileSession) =>
     session.accessToken,
   );
 
+// ===== UC13 — Nhật ký tập luyện =====
+type WorkoutHistoryResponse =
+  import("@fithub/contracts").WorkoutHistoryResponse;
+type WorkoutSessionDto = import("@fithub/contracts").WorkoutSessionDto;
+type PersonalRecordDto = import("@fithub/contracts").PersonalRecordDto;
+type CreateWorkoutSessionRequest =
+  import("@fithub/contracts").CreateWorkoutSessionRequest;
+
+export const getMyWorkouts = (
+  baseUrl: string,
+  session: MobileSession,
+  query: { page?: number; pageSize?: number } = {},
+) => {
+  const params = new URLSearchParams();
+  if (query.page) params.set("page", String(query.page));
+  if (query.pageSize) params.set("pageSize", String(query.pageSize));
+  const qs = params.toString();
+  return mobileRequest<WorkoutHistoryResponse>(
+    baseUrl,
+    `/api/workouts/my${qs ? `?${qs}` : ""}`,
+    {},
+    session.accessToken,
+  );
+};
+export const getMyPersonalRecords = (baseUrl: string, session: MobileSession) =>
+  mobileRequest<PersonalRecordDto[]>(
+    baseUrl,
+    "/api/workouts/my/records",
+    {},
+    session.accessToken,
+  );
+export const saveWorkout = (
+  baseUrl: string,
+  session: MobileSession,
+  body: CreateWorkoutSessionRequest,
+  id?: string,
+) =>
+  mobileRequest<WorkoutSessionDto>(
+    baseUrl,
+    id ? `/api/workouts/${id}` : "/api/workouts",
+    { method: id ? "PUT" : "POST", body: JSON.stringify(body) },
+    session.accessToken,
+  );
+export const deleteWorkout = (
+  baseUrl: string,
+  session: MobileSession,
+  id: string,
+) =>
+  mobileRequest<{ id: string; deleted: boolean }>(
+    baseUrl,
+    `/api/workouts/${id}`,
+    { method: "DELETE" },
+    session.accessToken,
+  );
+
 export const getMyMembershipDetail = (
   baseUrl: string,
   session: MobileSession,
