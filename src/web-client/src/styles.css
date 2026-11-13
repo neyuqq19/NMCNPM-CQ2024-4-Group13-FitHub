@@ -23,6 +23,7 @@ body {
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 button,
 input,
@@ -351,8 +352,9 @@ input:focus {
 .panel > :last-child {
   margin-bottom: 0;
 }
-.table-scroll {
-  overflow: auto;
+.table-scroll,
+.table-wrap {
+  overflow-x: auto;
   max-width: 100%;
   margin-bottom: 14px;
 }
@@ -1305,6 +1307,7 @@ button.member-action {
 }
 .app-shell .sidebar {
   top: 0;
+  z-index: 25;
   background: #fff;
   color: #52617b;
   border-right: 1px solid #e3e8f0;
@@ -1442,6 +1445,7 @@ button.member-action {
 
 .app-shell .main-content {
   background: linear-gradient(135deg, #fbfcfe, #f4f7fb);
+  overflow-x: hidden;
 }
 @media (max-width: 680px) {
   .app-shell.is-collapsed {
@@ -1462,6 +1466,131 @@ button.member-action {
   }
 }
 
+/* UC10 Equipment filter panel & QR label print styles */
+.equipment-filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.equipment-filter-row-1 {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 14px;
+  align-items: end;
+}
+.equipment-filter-row-1 input,
+.equipment-filter-row-1 select {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+}
+.equipment-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.equipment-search-icon {
+  position: absolute;
+  left: 12px;
+  color: #64748b;
+  pointer-events: none;
+}
+.equipment-search-box input {
+  padding-left: 36px !important;
+  width: 100%;
+}
+.equipment-status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.equipment-status-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.equipment-status-tab:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+.equipment-status-tab.active {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #ffffff;
+}
+.equipment-status-tab.active .status-dot {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.status-dot.success {
+  background: #10b981;
+}
+.status-dot.warning {
+  background: #f59e0b;
+}
+.status-dot.danger {
+  background: #ef4444;
+}
+.equipment-filter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+  color: #475569;
+}
+@media (max-width: 860px) {
+  .equipment-filter-row-1 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  @page {
+    size: auto;
+    margin: 12mm;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  .printable-qr-label,
+  .printable-qr-label * {
+    visibility: visible !important;
+  }
+  .printable-qr-label {
+    position: fixed !important;
+    left: 50% !important;
+    top: 24mm !important;
+    transform: translateX(-50%) !important;
+    width: 92mm !important;
+    margin: 0 !important;
+    padding: 8mm !important;
+    border: 2px solid #0f172a !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+  }
+  .no-print {
+    display: none !important;
+  }
 .trainer-tags, .trainer-specialty {
   display: flex;
   gap: 8px;
