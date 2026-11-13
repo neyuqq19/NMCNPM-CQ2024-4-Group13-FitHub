@@ -43,6 +43,8 @@ enum PaymentStatus {
 
 enum PaymentMethod {
   CASH
+  BANK_TRANSFER
+  VNPAY
 }
 
 enum AccessWindow {
@@ -57,28 +59,28 @@ enum Gender {
 }
 
 model User {
-  id                  String             @id @default(uuid()) @db.Uuid
-  email               String?            @unique
-  phone               String?            @unique
+  id                  String              @id @default(uuid()) @db.Uuid
+  email               String?             @unique
+  phone               String?             @unique
   displayName         String
   // Counter-created, unverified accounts have not set a password yet.
   passwordHash        String?
-  role                Role               @default(MEMBER)
-  status              AccountStatus      @default(PENDING_VERIFY)
-  verifiedAt          DateTime?          @db.Timestamptz(3)
-  failedLoginAttempts Int                @default(0)
-  loginLockedUntil    DateTime?          @db.Timestamptz(3)
-  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
+  role                Role                @default(MEMBER)
+  status              AccountStatus       @default(PENDING_VERIFY)
+  verifiedAt          DateTime?           @db.Timestamptz(3)
+  failedLoginAttempts Int                 @default(0)
+  loginLockedUntil    DateTime?           @db.Timestamptz(3)
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @db.Timestamptz(3)
   sessions            Session[]
   authEvents          AuthEvent[]
   emailVerification   EmailVerification?
   trainerProfile      TrainerProfile?
   memberProfile       MemberProfile?
-  confirmedPayments   Payment[]          @relation("PaymentConfirmer")
+  confirmedPayments   Payment[]           @relation("PaymentConfirmer")
   auditLogs           AuditLog[]
   scanners            CheckInScanner[]
-  createdFreezes      FreezePeriod[]     @relation("FreezeCreator")
+  createdFreezes      FreezePeriod[]      @relation("FreezeCreator")
   reportedIncidents   EquipmentIncident[] @relation("IncidentReporter")
   resolvedIncidents   EquipmentIncident[] @relation("IncidentResolver")
   equipmentHistory    EquipmentHistory[]  @relation("EquipmentActor")
@@ -118,25 +120,25 @@ model AuthEvent {
 
 model MemberProfile {
   bookedTrainerSlots WorkingSlot[]
-  id            String          @id @default(uuid()) @db.Uuid
-  userId        String          @unique @db.Uuid
-  user          User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  memberCode    String          @unique
-  dateOfBirth   DateTime?       @db.Date
-  address       String?
-  gender        Gender?
-  heightCm      Decimal?        @db.Decimal(5, 2)
-  weightKg      Decimal?        @db.Decimal(5, 2)
-  injuryHistory String?
+  id                 String           @id @default(uuid()) @db.Uuid
+  userId             String           @unique @db.Uuid
+  user               User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  memberCode         String           @unique
+  dateOfBirth        DateTime?        @db.Date
+  address            String?
+  gender             Gender?
+  heightCm           Decimal?         @db.Decimal(5, 2)
+  weightKg           Decimal?         @db.Decimal(5, 2)
+  injuryHistory      String?
   // API updates must match and increment this version to prevent lost updates.
-  version       Int             @default(0)
-  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime        @updatedAt @db.Timestamptz(3)
-  memberships   Membership[]
-  checkInQrs    CheckInQr[]
-  checkIns      CheckInRecord[]
-  workoutSessions WorkoutSession[]
-  personalRecords PersonalRecord[]
+  version            Int              @default(0)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(3)
+  memberships        Membership[]
+  checkInQrs         CheckInQr[]
+  checkIns           CheckInRecord[]
+  workoutSessions    WorkoutSession[]
+  personalRecords    PersonalRecord[]
 }
 
 model Package {
@@ -193,13 +195,25 @@ model Payment {
   method         PaymentMethod @default(CASH)
   status         PaymentStatus @default(PENDING)
   idempotencyKey String        @unique @db.Uuid
-  confirmedById  String?       @db.Uuid
-  confirmedBy    User?         @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
-  confirmedAt    DateTime?     @db.Timestamptz(3)
-  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+
+  // confirmedById đã để String? (Optional) - Giải quyết đúng vấn đề VNPay không có Admin thu tiền
+  confirmedById String?   @db.Uuid
+  confirmedBy   User?     @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+  confirmedAt   DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  // SỬA ĐỔI: Dùng Enum thay vì String
+  benefitStatus        BenefitStatus        @default(GRANTED)
+  reconciliationStatus ReconciliationStatus @default(NONE)
+
+  // SỬA ĐỔI: Thêm @unique để backend bắt Webhook VNPay nhanh và chuẩn xác
+  vnpTxnRef        String?  @unique
+  vnpTransactionNo String?
+  invoice          Invoice?
 
   @@index([status, confirmedAt])
+  @@index([createdAt, id])
 }
 
 model AuditLog {
@@ -623,4 +637,34 @@ model PushDevice {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([userId, deviceId])
+}
+
+enum InvoiceStatus {
+  ISSUED
+  FAILED
+}
+
+enum BenefitStatus {
+  GRANTED
+  NEEDS_REVIEW
+  NONE
+}
+
+enum ReconciliationStatus {
+  RECONCILED
+  MISMATCHED
+  NONE
+}
+
+model Invoice {
+  id           String        @id @default(uuid()) @db.Uuid
+  code         String        @unique
+  paymentId    String        @unique @db.Uuid
+  payment      Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  status       InvoiceStatus @default(ISSUED)
+  issuedAt     DateTime      @default(now()) @db.Timestamptz(3)
+  pdfUrl       String?
+  errorMessage String?
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
 }
