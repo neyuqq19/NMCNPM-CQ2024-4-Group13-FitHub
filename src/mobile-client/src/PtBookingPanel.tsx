@@ -76,6 +76,7 @@ function Summary({ trainer }: { trainer: TrainerSummaryDto }) {
       )}
       <View style={s.summary}>
         <Text style={s.name}>{trainer.displayName}</Text>
+        <Text style={s.meta}>Lĩnh vực chuyên môn</Text>
         <Text style={s.text}>{trainer.specialties.join(" · ")}</Text>
         <Text style={s.meta}>
           {trainer.experienceYears} năm kinh nghiệm ·{" "}
@@ -158,6 +159,7 @@ function TrainerDetail({
             <>
               <View style={s.card}>
                 <Summary trainer={data} />
+                <Text style={s.meta}>Giới thiệu bản thân</Text>
                 <Text style={s.text}>{data.bio}</Text>
               </View>
               <AvailableSlots {...connection} id={id} />

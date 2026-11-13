@@ -143,6 +143,21 @@ export class TrainersController {
     );
   }
 
+  @Patch("me/certifications/:certId")
+  async editCertification(
+    @Headers("authorization") header: string,
+    @Param("certId", new ParseUUIDPipe()) certId: string,
+    @Body() body: unknown,
+  ) {
+    const { actorId, id } = await this.owner(header, "me");
+    return this.trainers.updateCertification(
+      actorId,
+      id,
+      certId,
+      certificationInput(body),
+    );
+  }
+
   @Delete(":target/certifications/:certId")
   async remove(
     @Headers("authorization") header: string,

@@ -1454,24 +1454,11 @@ a.member-action:focus-visible {
   padding: 0;
   list-style: none;
 }
-.slot-preview li, .slot-status {
+.slot-preview li {
   padding: 4px 10px;
   border-radius: 6px;
-}
-.slot-preview li, .status-OPEN {
   background: #e0f4e8;
   color: #185332;
-}
-.status-BOOKED {
-  background: #eee6fb;
-  color: #573a80;
-}
-.status-UNAVAILABLE {
-  background: #e8ebef;
-  color: #3b4655;
-}
-.slot-table td:last-child {
-  white-space: normal;
 }
 .slot-dialog {
   border: 1px solid var(--border);
