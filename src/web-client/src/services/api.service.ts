@@ -1,13 +1,26 @@
 import type {
   ApiErrorBody,
+  CreateEquipmentRequest,
+  CreateIncidentRequest,
   CreateMemberRequest,
+  CreatePackageRequest,
   CurrentUser,
+  EquipmentDetailDto,
+  EquipmentPageDto,
+  FreezeMembershipRequest,
+  FreezeMembershipResponse,
+  FreezePeriodDto,
   LoginRequest,
   LoginResponse,
   MemberDetailDto,
   MemberPage,
   MemberOverviewDto,
+  PackageDto,
+  ResolveMaintenanceRequest,
+  RetireEquipmentRequest,
+  UpdateEquipmentRequest,
   UpdateMemberRequest,
+  UpdatePackageRequest,
 } from "@fithub/contracts";
 const API_BASE =
   (import.meta as unknown as { env?: Record<string, string> }).env
@@ -42,6 +55,7 @@ export async function fetchFromApi<T>(
       message: "Không kết nối được máy chủ. Kiểm tra kết nối rồi thử lại.",
     });
   }
+  if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && !path.endsWith("/login"))
@@ -82,6 +96,64 @@ export const apiService = {
       method: "POST",
       body: JSON.stringify({ version, reason }),
     }),
-  getPackages: () => fetchFromApi("/api/packages"),
+  getPackages: (includeInactive = false) =>
+    fetchFromApi<PackageDto[]>(
+      `/api/packages${includeInactive ? "?includeInactive=true" : ""}`,
+    ),
+  createPackage: (body: CreatePackageRequest) =>
+    fetchFromApi<PackageDto>("/api/packages", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updatePackage: (id: string, body: UpdatePackageRequest) =>
+    fetchFromApi<PackageDto>(`/api/packages/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  freezeMembership: (id: string, body: FreezeMembershipRequest) =>
+    fetchFromApi<FreezeMembershipResponse>(`/api/memberships/${id}/freeze`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  unfreezeMembership: (id: string) =>
+    fetchFromApi<FreezeMembershipResponse>(`/api/memberships/${id}/unfreeze`, {
+      method: "POST",
+    }),
+  getMembershipFreezes: (id: string) =>
+    fetchFromApi<FreezePeriodDto[]>(`/api/memberships/${id}/freezes`),
+  getEquipments: (query = "") =>
+    fetchFromApi<EquipmentPageDto>(
+      `/api/equipments${query ? `?${query}` : ""}`,
+    ),
+  getEquipment: (id: string) =>
+    fetchFromApi<EquipmentDetailDto>(`/api/equipments/${id}`),
+  createEquipment: (body: CreateEquipmentRequest) =>
+    fetchFromApi<EquipmentDetailDto>("/api/equipments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateEquipment: (id: string, body: UpdateEquipmentRequest) =>
+    fetchFromApi<EquipmentDetailDto>(`/api/equipments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  reportEquipmentIncident: (id: string, body: CreateIncidentRequest) =>
+    fetchFromApi<EquipmentDetailDto>(`/api/equipments/${id}/incidents`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  resolveEquipmentMaintenance: (id: string, body: ResolveMaintenanceRequest) =>
+    fetchFromApi<EquipmentDetailDto>(
+      `/api/equipments/${id}/resolve-maintenance`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+  retireEquipment: (id: string, body: RetireEquipmentRequest = {}) =>
+    fetchFromApi<EquipmentDetailDto>(`/api/equipments/${id}/retire`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   getHealth: () => fetchFromApi("/api/health"),
 };
