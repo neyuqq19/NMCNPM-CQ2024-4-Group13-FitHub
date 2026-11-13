@@ -23,6 +23,7 @@ body {
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 button,
 input,
@@ -351,8 +352,9 @@ input:focus {
 .panel > :last-child {
   margin-bottom: 0;
 }
-.table-scroll {
-  overflow: auto;
+.table-scroll,
+.table-wrap {
+  overflow-x: auto;
   max-width: 100%;
   margin-bottom: 14px;
 }
@@ -1305,6 +1307,7 @@ button.member-action {
 }
 .app-shell .sidebar {
   top: 0;
+  z-index: 25;
   background: #fff;
   color: #52617b;
   border-right: 1px solid #e3e8f0;
@@ -1444,6 +1447,7 @@ button.member-action {
 
 .app-shell .main-content {
   background: linear-gradient(135deg, #fbfcfe, #f4f7fb);
+  overflow-x: hidden;
 }
 @media (max-width: 680px) {
   .app-shell.is-collapsed {

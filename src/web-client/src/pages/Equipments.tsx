@@ -944,8 +944,8 @@ export function EquipmentsPage() {
             }
           />
         ) : (
-          <div className="table-wrap">
-            <table className="table">
+          <div className="table-scroll">
+            <table className="table equipment-table">
               <thead>
                 <tr>
                   <th>Mã thiết bị</th>
@@ -963,7 +963,7 @@ export function EquipmentsPage() {
                     <td>
                       <code>{eq.code}</code>
                     </td>
-                    <td>
+                    <td style={{ whiteSpace: "normal", minWidth: "220px" }}>
                       <strong>{eq.name}</strong>
                       {eq.openIncident && (
                         <div
@@ -971,6 +971,7 @@ export function EquipmentsPage() {
                             fontSize: "0.82rem",
                             color: "#b45309",
                             marginTop: "0.2rem",
+                            whiteSpace: "normal",
                           }}
                         >
                           Sự cố mở ({eq.openIncident.severity}):{" "}
@@ -979,13 +980,16 @@ export function EquipmentsPage() {
                       )}
                     </td>
                     <td>{categoryShortLabel[eq.category]}</td>
-                    <td>{eq.zone}</td>
+                    <td style={{ whiteSpace: "normal" }}>{eq.zone}</td>
                     <td>{formatDate(eq.warrantyUntil)}</td>
                     <td>
                       <EquipmentStatusBadge status={eq.status} />
                     </td>
                     <td>
-                      <div className="member-actions">
+                      <div
+                        className="member-row-actions"
+                        style={{ justifyContent: "flex-start", gap: 8 }}
+                      >
                         <Link
                           className="member-action"
                           to={`/equipments/${eq.id}`}
@@ -1790,7 +1794,7 @@ export function EquipmentDetailPage() {
             description="Thiết bị này chưa từng phát sinh báo hỏng hoặc bảo trì."
           />
         ) : (
-          <div className="table-wrap">
+          <div className="table-scroll">
             <table className="table">
               <thead>
                 <tr>
@@ -1844,7 +1848,7 @@ export function EquipmentDetailPage() {
         {equipment.history.length === 0 ? (
           <p>Chưa có bản ghi lịch sử.</p>
         ) : (
-          <div className="table-wrap">
+          <div className="table-scroll">
             <table className="table">
               <thead>
                 <tr>

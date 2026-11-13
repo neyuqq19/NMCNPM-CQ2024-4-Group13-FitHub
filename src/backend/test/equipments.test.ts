@@ -139,6 +139,22 @@ test("UC10-01: RBAC enforcement, concurrent auto-code generation (EQ-{CATEGORY}-
   assert.equal(c1.body.history[0].action, "CREATED");
   assert.equal(c1.body.history[0].toStatus, "OPERATIONAL");
 
+  // FITHUB-205 #4: Direct duplicate equipment code insertion must be rejected by Equipment_code_key unique constraint
+  await assert.rejects(
+    () =>
+      db.equipment.create({
+        data: {
+          code: c1.body.code,
+          name: "Thiết bị trùng mã code",
+          category: "CARDIO",
+          zone: uniqueZone,
+          status: "OPERATIONAL",
+          qrCodePayload: `FITHUB://EQUIPMENT/DUP-${randomUUID().slice(0, 6)}`,
+        },
+      }),
+    /Unique constraint failed/i,
+  );
+
   // List filter by zone, category, status, and search query q
   const listRes = await api
     .get("/api/equipments")
