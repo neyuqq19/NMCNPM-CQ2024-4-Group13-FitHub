@@ -228,6 +228,61 @@ test("UC05-01: package catalog create, duplicate code 409, update and status tog
   assert.equal(toggled.body.isActive, false);
 });
 
+test("UC05-01b (FITHUB-205 #2 & #3): registering a package creates PENDING_PAYMENT membership and blocks duplicate registration when PENDING or ACTIVE (409 Conflict)", async () => {
+  setClock(baseDay);
+  const member = await createMemberFixture();
+
+  // FITHUB-205 #2: Registering a package creates a PENDING_PAYMENT membership & PENDING payment
+  const regPending = await api
+    .post(`/api/members/${member.id}/memberships`)
+    .set(auth())
+    .send({
+      requestId: randomUUID(),
+      packageId: pack6M.id,
+      startsOn: baseDay,
+      expectedPrice: pack6M.price,
+    });
+  assert.equal(regPending.status, 201);
+  assert.equal(regPending.body.status, "PENDING");
+  assert.equal(regPending.body.membership.status, "PENDING_PAYMENT");
+  assert.equal(regPending.body.membership.startsOn, baseDay);
+
+  // FITHUB-205 #3a: Attempting a second registration while a PENDING_PAYMENT order exists -> 409 Conflict
+  const dupWhilePending = await api
+    .post(`/api/members/${member.id}/memberships`)
+    .set(auth())
+    .send({
+      requestId: randomUUID(),
+      packageId: pack3M.id,
+      startsOn: baseDay,
+      expectedPrice: pack3M.price,
+    });
+  assert.equal(dupWhilePending.status, 409);
+
+  // Confirm payment -> membership transitions to ACTIVE
+  const confirmed = await api
+    .post(`/api/payments/${regPending.body.id}/confirm`)
+    .set(auth())
+    .send({
+      idempotencyKey: randomUUID(),
+      amount: pack6M.price,
+    });
+  assert.equal(confirmed.status, 200);
+  assert.equal(confirmed.body.membership.status, "ACTIVE");
+
+  // FITHUB-205 #3b: Attempting to register an overlapping package while ACTIVE -> 409 Conflict
+  const dupWhileActive = await api
+    .post(`/api/members/${member.id}/memberships`)
+    .set(auth())
+    .send({
+      requestId: randomUUID(),
+      packageId: pack3M.id,
+      startsOn: baseDay,
+      expectedPrice: pack3M.price,
+    });
+  assert.equal(dupWhileActive.status, 409);
+});
+
 test("UC05-02: freeze eligibility (< 6 months rejected, expired rejected, out-of-range start date rejected, BVA 6/7/30/31 days)", async () => {
   setClock(baseDay);
   const member = await createMemberFixture();
