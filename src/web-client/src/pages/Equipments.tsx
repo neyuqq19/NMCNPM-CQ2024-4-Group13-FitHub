@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type {
   CreateEquipmentRequest,
   CreateIncidentRequest,
@@ -13,6 +13,7 @@ import type {
   RetireEquipmentRequest,
   UpdateEquipmentRequest,
 } from "@fithub/contracts";
+import { BrowserQRCodeSvgWriter } from "@zxing/browser";
 import {
   Plus,
   QrCode,
@@ -23,9 +24,327 @@ import {
   Edit3,
   Eye,
   AlertTriangle,
+  Search,
+  RotateCcw,
+  Calendar,
 } from "lucide-react";
 import { Badge, Empty, FieldError, Notice, PageHeading } from "../components";
 import { ApiError, apiService } from "../services/api.service";
+
+const DEFAULT_ZONES = [
+  "Tầng 1 - Khu Cardio",
+  "Tầng 1 - Khu Functional",
+  "Tầng 2 - Khu Strength",
+  "Tầng 2 - Khu Free Weight",
+];
+
+function normalizeZoneKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function isoToDdMmYyyy(iso?: string | null): string {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+  if (!m) return iso;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+function ddMmYyyyToIso(display: string): string | null {
+  const trimmed = display.trim();
+  if (!trimmed) return "";
+  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(trimmed);
+  if (!m) return null;
+  const dd = Number(m[1]);
+  const mm = Number(m[2]);
+  const yyyy = Number(m[3]);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1990 || yyyy > 2100) {
+    return null;
+  }
+  const iso = `${String(yyyy).padStart(4, "0")}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  const dt = new Date(`${iso}T00:00:00.000Z`);
+  if (Number.isNaN(dt.getTime()) || dt.toISOString().slice(0, 10) !== iso) {
+    return null;
+  }
+  return iso;
+}
+
+function DateInputDdMmYyyy({
+  id,
+  valueIso,
+  onChangeIso,
+  ariaInvalid,
+}: {
+  id: string;
+  valueIso: string;
+  onChangeIso: (nextIso: string) => void;
+  ariaInvalid?: boolean;
+}) {
+  const [text, setText] = useState(() => isoToDdMmYyyy(valueIso));
+  const nativePickerRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setText(isoToDdMmYyyy(valueIso));
+  }, [valueIso]);
+
+  return (
+    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+      <input
+        id={id}
+        type="text"
+        inputMode="numeric"
+        placeholder="dd/MM/yyyy"
+        value={text}
+        aria-invalid={ariaInvalid}
+        style={{ paddingRight: "2.4rem", width: "100%" }}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setText(raw);
+          if (!raw.trim()) {
+            onChangeIso("");
+            return;
+          }
+          const parsed = ddMmYyyyToIso(raw);
+          if (parsed) {
+            onChangeIso(parsed);
+          }
+        }}
+        onBlur={() => {
+          if (!text.trim()) {
+            onChangeIso("");
+            return;
+          }
+          const parsed = ddMmYyyyToIso(text);
+          if (parsed) {
+            setText(isoToDdMmYyyy(parsed));
+            onChangeIso(parsed);
+          }
+        }}
+      />
+      <button
+        type="button"
+        aria-label="Chọn ngày từ lịch"
+        title="Chọn ngày"
+        onClick={() => {
+          const el = nativePickerRef.current;
+          if (!el) return;
+          if ("showPicker" in el && typeof el.showPicker === "function") {
+            el.showPicker();
+          } else {
+            el.focus();
+          }
+        }}
+        style={{
+          position: "absolute",
+          right: "0.45rem",
+          background: "transparent",
+          border: "none",
+          color: "#475569",
+          cursor: "pointer",
+          padding: "0.25rem",
+          display: "inline-flex",
+          alignItems: "center",
+        }}
+      >
+        <Calendar size={16} aria-hidden="true" />
+      </button>
+      <input
+        ref={nativePickerRef}
+        type="date"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={valueIso || ""}
+        onChange={(e) => {
+          onChangeIso(e.target.value);
+          setText(isoToDdMmYyyy(e.target.value));
+        }}
+        style={{
+          position: "absolute",
+          opacity: 0,
+          pointerEvents: "none",
+          width: 0,
+          height: 0,
+        }}
+      />
+    </div>
+  );
+}
+
+function QrCodeGraphic({
+  payload,
+  size = 148,
+}: {
+  payload: string;
+  size?: number;
+}) {
+  const svgMarkup = useMemo(() => {
+    try {
+      const writer = new BrowserQRCodeSvgWriter();
+      const svgElement = writer.write(payload, size, size);
+      svgElement.setAttribute("viewBox", `0 0 ${size} ${size}`);
+      svgElement.style.display = "block";
+      return svgElement.outerHTML;
+    } catch {
+      return "";
+    }
+  }, [payload, size]);
+
+  if (!svgMarkup) {
+    return <QrCode size={56} aria-hidden="true" />;
+  }
+
+  return (
+    <div
+      className="qr-svg-container"
+      aria-label={`Mã QR cho ${payload}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#ffffff",
+        padding: "0.5rem",
+        borderRadius: "10px",
+        border: "1px solid #cbd5e1",
+      }}
+      dangerouslySetInnerHTML={{ __html: svgMarkup }}
+    />
+  );
+}
+
+function ZoneSelectorField({
+  id,
+  value,
+  availableZones,
+  onChange,
+  onAddZone,
+  errorMessage,
+}: {
+  id: string;
+  value: string;
+  availableZones: string[];
+  onChange: (zone: string) => void;
+  onAddZone: (newZone: string) => void;
+  errorMessage?: string;
+}) {
+  const [addingNew, setAddingNew] = useState(false);
+  const [newZoneText, setNewZoneText] = useState("");
+  const [localError, setLocalError] = useState("");
+
+  function handleConfirmAddZone() {
+    const trimmed = newZoneText.trim();
+    if (!trimmed) {
+      setLocalError("Vui lòng nhập tên khu vực mới.");
+      return;
+    }
+    const normNew = normalizeZoneKey(trimmed);
+    const duplicate = availableZones.find(
+      (z) => normalizeZoneKey(z) === normNew,
+    );
+    if (duplicate) {
+      setLocalError(
+        `Khu vực "${trimmed}" bị trùng với khu vực đã có "${duplicate}".`,
+      );
+      return;
+    }
+    setLocalError("");
+    onAddZone(trimmed);
+    onChange(trimmed);
+    setNewZoneText("");
+    setAddingNew(false);
+  }
+
+  return (
+    <div className="field">
+      <label htmlFor={id}>Khu vực đặt máy (Zone) *</label>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => {
+            if (e.target.value === "__ADD_NEW__") {
+              setAddingNew(true);
+              setLocalError("");
+            } else {
+              onChange(e.target.value);
+            }
+          }}
+          style={{ flex: 1 }}
+          aria-invalid={Boolean(errorMessage || localError)}
+        >
+          {availableZones.map((z) => (
+            <option key={z} value={z}>
+              {z}
+            </option>
+          ))}
+          <option value="__ADD_NEW__">+ Thêm khu vực mới...</option>
+        </select>
+        {!addingNew && (
+          <button
+            type="button"
+            className="button outline"
+            onClick={() => {
+              setAddingNew(true);
+              setLocalError("");
+            }}
+            style={{ whiteSpace: "nowrap", height: "40px" }}
+          >
+            + Khu vực mới
+          </button>
+        )}
+      </div>
+
+      {addingNew && (
+        <div
+          style={{
+            marginTop: "0.5rem",
+            display: "flex",
+            gap: "0.5rem",
+            alignItems: "center",
+          }}
+        >
+          <input
+            type="text"
+            value={newZoneText}
+            onChange={(e) => {
+              setNewZoneText(e.target.value);
+              setLocalError("");
+            }}
+            placeholder="Nhập tên khu vực mới (VD: Tầng 3 - Khu Boxing)"
+            style={{ flex: 1 }}
+          />
+          <button
+            type="button"
+            className="button primary"
+            onClick={handleConfirmAddZone}
+          >
+            Thêm
+          </button>
+          <button
+            type="button"
+            className="button outline"
+            onClick={() => {
+              setAddingNew(false);
+              setNewZoneText("");
+              setLocalError("");
+            }}
+          >
+            Hủy
+          </button>
+        </div>
+      )}
+
+      <FieldError
+        id={`${id}-err`}
+        message={localError || errorMessage}
+      />
+    </div>
+  );
+}
 
 const categoryLabel: Record<EquipmentCategory, string> = {
   CARDIO: "Cardio (Máy chạy, xe đạp, elip)",
@@ -55,6 +374,10 @@ const severityLabel: Record<IncidentSeverity, string> = {
 
 function formatDate(value?: string | null) {
   if (!value) return "Chưa cập nhật";
+  const formatted = isoToDdMmYyyy(value);
+  if (formatted && /^\d{2}\/\d{2}\/\d{4}$/.test(formatted)) {
+    return formatted;
+  }
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return new Intl.DateTimeFormat("vi-VN", {
@@ -85,7 +408,7 @@ function EquipmentStatusBadge({ status }: { status: EquipmentStatus }) {
       ? "success"
       : status === "OUT_OF_ORDER"
         ? "warning"
-        : "neutral";
+        : "danger";
   return <Badge tone={tone}>{statusLabel[status]}</Badge>;
 }
 
@@ -112,6 +435,7 @@ export function EquipmentsPage() {
   const [items, setItems] = useState<EquipmentDto[]>([]);
   const [overview, setOverview] = useState<EquipmentOverviewDto | null>(null);
   const [zones, setZones] = useState<string[]>([]);
+  const [customZones, setCustomZones] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -133,6 +457,17 @@ export function EquipmentsPage() {
   const [createdItem, setCreatedItem] = useState<EquipmentDetailDto | null>(
     null,
   );
+
+  const availableZones = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const z of [...DEFAULT_ZONES, ...zones, ...customZones]) {
+      const k = normalizeZoneKey(z);
+      if (k && !map.has(k)) {
+        map.set(k, z);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [zones, customZones]);
 
   async function loadEquipments() {
     setLoading(true);
@@ -164,6 +499,13 @@ export function EquipmentsPage() {
     }, 200);
     return () => window.clearTimeout(timer);
   }, [q, categoryFilter, zoneFilter, statusFilter]);
+
+  function resetAllFilters() {
+    setQ("");
+    setCategoryFilter("ALL");
+    setZoneFilter("ALL");
+    setStatusFilter("ALL");
+  }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -226,6 +568,12 @@ export function EquipmentsPage() {
     },
   ];
 
+  const hasActiveFilter =
+    Boolean(q.trim()) ||
+    categoryFilter !== "ALL" ||
+    zoneFilter !== "ALL" ||
+    statusFilter !== "ALL";
+
   return (
     <>
       <PageHeading
@@ -284,31 +632,34 @@ export function EquipmentsPage() {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "flex-start",
+              alignItems: "center",
               gap: "1rem",
               flexWrap: "wrap",
             }}
           >
-            <div>
-              <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>
-                Tem định danh QR tĩnh vừa cấp: <code>{createdItem.code}</code>
-              </h2>
-              <p style={{ margin: "0 0 0.5rem", color: "#475569" }}>
-                Thiết bị: <strong>{createdItem.name}</strong> · Khu vực:{" "}
-                <strong>{createdItem.zone}</strong>
-              </p>
-              <p style={{ margin: 0, fontSize: "0.9rem" }}>
-                Chuỗi QR tĩnh bất biến:{" "}
-                <code
-                  style={{
-                    background: "#f1f5f9",
-                    padding: "0.2rem 0.45rem",
-                    borderRadius: "4px",
-                  }}
-                >
-                  {createdItem.qrCodePayload}
-                </code>
-              </p>
+            <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+              <QrCodeGraphic payload={createdItem.qrCodePayload} size={96} />
+              <div>
+                <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>
+                  Tem định danh QR tĩnh vừa cấp: <code>{createdItem.code}</code>
+                </h2>
+                <p style={{ margin: "0 0 0.5rem", color: "#475569" }}>
+                  Thiết bị: <strong>{createdItem.name}</strong> · Khu vực:{" "}
+                  <strong>{createdItem.zone}</strong>
+                </p>
+                <p style={{ margin: 0, fontSize: "0.9rem" }}>
+                  Chuỗi QR tĩnh bất biến:{" "}
+                  <code
+                    style={{
+                      background: "#f1f5f9",
+                      padding: "0.2rem 0.45rem",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    {createdItem.qrCodePayload}
+                  </code>
+                </p>
+              </div>
             </div>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <button
@@ -379,27 +730,26 @@ export function EquipmentsPage() {
                 />
               </div>
 
-              <div className="field">
-                <label htmlFor="eq-zone">Khu vực đặt máy (Zone) *</label>
-                <input
-                  id="eq-zone"
-                  value={form.zone}
-                  onChange={(e) => setForm({ ...form, zone: e.target.value })}
-                  placeholder="VD: Tầng 1 - Khu Cardio"
-                  aria-invalid={Boolean(fieldErrors.zone)}
-                />
-                <FieldError id="err-eq-zone" message={fieldErrors.zone} />
-              </div>
+              <ZoneSelectorField
+                id="eq-zone"
+                value={form.zone}
+                availableZones={availableZones}
+                onChange={(zone) => setForm({ ...form, zone })}
+                onAddZone={(newZone) =>
+                  setCustomZones((prev) => [...prev, newZone])
+                }
+                errorMessage={fieldErrors.zone}
+              />
 
               <div className="field">
-                <label htmlFor="eq-purchased">Ngày nhập máy</label>
-                <input
+                <label htmlFor="eq-purchased">Ngày nhập máy (dd/MM/yyyy)</label>
+                <DateInputDdMmYyyy
                   id="eq-purchased"
-                  type="date"
-                  value={form.purchasedAt}
-                  onChange={(e) =>
-                    setForm({ ...form, purchasedAt: e.target.value })
+                  valueIso={form.purchasedAt}
+                  onChangeIso={(purchasedAt) =>
+                    setForm({ ...form, purchasedAt })
                   }
+                  ariaInvalid={Boolean(fieldErrors.purchasedAt)}
                 />
                 <FieldError
                   id="err-eq-purchased"
@@ -408,14 +758,14 @@ export function EquipmentsPage() {
               </div>
 
               <div className="field">
-                <label htmlFor="eq-warranty">Hạn bảo hành</label>
-                <input
+                <label htmlFor="eq-warranty">Hạn bảo hành (dd/MM/yyyy)</label>
+                <DateInputDdMmYyyy
                   id="eq-warranty"
-                  type="date"
-                  value={form.warrantyUntil}
-                  onChange={(e) =>
-                    setForm({ ...form, warrantyUntil: e.target.value })
+                  valueIso={form.warrantyUntil}
+                  onChangeIso={(warrantyUntil) =>
+                    setForm({ ...form, warrantyUntil })
                   }
+                  ariaInvalid={Boolean(fieldErrors.warrantyUntil)}
                 />
                 <FieldError
                   id="err-eq-warranty"
@@ -456,89 +806,121 @@ export function EquipmentsPage() {
       )}
 
       <section className="panel">
-        <div
-          className="toolbar"
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.75rem",
-            justifyContent: "space-between",
-            marginBottom: "1rem",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "0.6rem",
-              flex: "1 1 520px",
-            }}
-          >
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm theo mã thiết bị (EQ-...) hoặc tên máy..."
-              aria-label="Tìm kiếm thiết bị"
-              style={{ minWidth: "240px", flex: "1 1 240px" }}
-            />
+        <div className="equipment-filter-panel">
+          <div className="equipment-filter-row-1">
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="filter-eq-search">Tìm kiếm thiết bị</label>
+              <div className="equipment-search-box">
+                <Search
+                  size={16}
+                  aria-hidden="true"
+                  className="equipment-search-icon"
+                />
+                <input
+                  id="filter-eq-search"
+                  type="search"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Tìm theo mã thiết bị (EQ-...) hoặc tên máy..."
+                  aria-label="Tìm kiếm thiết bị"
+                />
+              </div>
+            </div>
 
-            <select
-              aria-label="Lọc theo nhóm thiết bị"
-              value={categoryFilter}
-              onChange={(e) =>
-                setCategoryFilter(e.target.value as "ALL" | EquipmentCategory)
-              }
-            >
-              <option value="ALL">Tất cả nhóm máy</option>
-              <option value="CARDIO">Cardio</option>
-              <option value="STRENGTH">Strength</option>
-              <option value="FREE_WEIGHT">Free Weight</option>
-              <option value="FUNCTIONAL">Functional</option>
-            </select>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="filter-eq-category">Nhóm thiết bị</label>
+              <select
+                id="filter-eq-category"
+                aria-label="Lọc theo nhóm thiết bị"
+                value={categoryFilter}
+                onChange={(e) =>
+                  setCategoryFilter(e.target.value as "ALL" | EquipmentCategory)
+                }
+              >
+                <option value="ALL">Tất cả nhóm máy</option>
+                <option value="CARDIO">Cardio</option>
+                <option value="STRENGTH">Strength</option>
+                <option value="FREE_WEIGHT">Free Weight</option>
+                <option value="FUNCTIONAL">Functional</option>
+              </select>
+            </div>
 
-            <select
-              aria-label="Lọc theo khu vực"
-              value={zoneFilter}
-              onChange={(e) => setZoneFilter(e.target.value)}
-            >
-              <option value="ALL">Tất cả khu vực</option>
-              {zones.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="filter-eq-zone">Khu vực</label>
+              <select
+                id="filter-eq-zone"
+                aria-label="Lọc theo khu vực"
+                value={zoneFilter}
+                onChange={(e) => setZoneFilter(e.target.value)}
+              >
+                <option value="ALL">Tất cả khu vực</option>
+                {availableZones.map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          <div
+            className="equipment-status-tabs"
+            role="tablist"
+            aria-label="Lọc theo trạng thái thiết bị"
+          >
             <button
               type="button"
-              className={`button ${statusFilter === "ALL" ? "primary" : "outline"}`}
+              role="tab"
+              aria-selected={statusFilter === "ALL"}
+              className={`equipment-status-tab ${statusFilter === "ALL" ? "active" : ""}`}
               onClick={() => setStatusFilter("ALL")}
             >
               Tất cả ({overview?.total ?? items.length})
             </button>
             <button
               type="button"
-              className={`button ${statusFilter === "OPERATIONAL" ? "primary" : "outline"}`}
+              role="tab"
+              aria-selected={statusFilter === "OPERATIONAL"}
+              className={`equipment-status-tab ${statusFilter === "OPERATIONAL" ? "active" : ""}`}
               onClick={() => setStatusFilter("OPERATIONAL")}
             >
+              <span className="status-dot success" aria-hidden="true" />
               Đang hoạt động ({overview?.operational ?? 0})
             </button>
             <button
               type="button"
-              className={`button ${statusFilter === "OUT_OF_ORDER" ? "primary" : "outline"}`}
+              role="tab"
+              aria-selected={statusFilter === "OUT_OF_ORDER"}
+              className={`equipment-status-tab ${statusFilter === "OUT_OF_ORDER" ? "active" : ""}`}
               onClick={() => setStatusFilter("OUT_OF_ORDER")}
             >
+              <span className="status-dot warning" aria-hidden="true" />
               Đang bảo trì ({overview?.outOfOrder ?? 0})
             </button>
             <button
               type="button"
-              className={`button ${statusFilter === "RETIRED" ? "primary" : "outline"}`}
+              role="tab"
+              aria-selected={statusFilter === "RETIRED"}
+              className={`equipment-status-tab ${statusFilter === "RETIRED" ? "active" : ""}`}
               onClick={() => setStatusFilter("RETIRED")}
             >
+              <span className="status-dot danger" aria-hidden="true" />
               Ngưng sử dụng ({overview?.retired ?? 0})
+            </button>
+          </div>
+
+          <div className="equipment-filter-summary">
+            <span>
+              Hiển thị <strong>{items.length}</strong> thiết bị
+            </span>
+            <button
+              type="button"
+              className="button outline"
+              disabled={!hasActiveFilter}
+              onClick={resetAllFilters}
+              style={{ height: "34px", padding: "0 0.75rem" }}
+            >
+              <RotateCcw size={14} aria-hidden="true" /> Xóa bộ lọc
             </button>
           </div>
         </div>
@@ -549,6 +931,17 @@ export function EquipmentsPage() {
           <Empty
             title="Không có thiết bị phù hợp"
             description="Hãy điều chỉnh bộ lọc hoặc thêm thiết bị mới vào phòng tập."
+            action={
+              hasActiveFilter ? (
+                <button
+                  type="button"
+                  className="button outline"
+                  onClick={resetAllFilters}
+                >
+                  Xóa bộ lọc
+                </button>
+              ) : undefined
+            }
           />
         ) : (
           <div className="table-wrap">
@@ -592,12 +985,26 @@ export function EquipmentsPage() {
                       <EquipmentStatusBadge status={eq.status} />
                     </td>
                     <td>
-                      <Link
-                        className="button outline"
-                        to={`/equipments/${eq.id}`}
-                      >
-                        <Eye size={15} aria-hidden="true" /> Chi tiết & Bảo trì
-                      </Link>
+                      <div className="member-actions">
+                        <Link
+                          className="member-action"
+                          to={`/equipments/${eq.id}`}
+                          aria-label={`Xem chi tiết ${eq.code}`}
+                          title="Xem chi tiết & Bảo trì"
+                        >
+                          <Eye size={16} aria-hidden="true" />
+                        </Link>
+                        {eq.status !== "RETIRED" && (
+                          <Link
+                            className="member-action"
+                            to={`/equipments/${eq.id}?mode=EDIT`}
+                            aria-label={`Cập nhật ${eq.code}`}
+                            title="Cập nhật thông tin"
+                          >
+                            <Edit3 size={16} aria-hidden="true" />
+                          </Link>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -614,11 +1021,15 @@ type ActionModalMode = "NONE" | "EDIT" | "INCIDENT" | "RESOLVE" | "RETIRE";
 
 export function EquipmentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [equipment, setEquipment] = useState<EquipmentDetailDto | null>(null);
+  const [customZones, setCustomZones] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [mode, setMode] = useState<ActionModalMode>("NONE");
+  const [mode, setMode] = useState<ActionModalMode>(() =>
+    searchParams.get("mode") === "EDIT" ? "EDIT" : "NONE",
+  );
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -656,6 +1067,22 @@ export function EquipmentDetailPage() {
 
   const [retireReason, setRetireReason] = useState("");
 
+  const availableZones = useMemo(() => {
+    const map = new Map<string, string>();
+    const list = [
+      ...DEFAULT_ZONES,
+      ...(equipment?.zone ? [equipment.zone] : []),
+      ...customZones,
+    ];
+    for (const z of list) {
+      const k = normalizeZoneKey(z);
+      if (k && !map.has(k)) {
+        map.set(k, z);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [equipment?.zone, customZones]);
+
   async function loadDetail() {
     if (!id) return;
     setLoading(true);
@@ -692,6 +1119,9 @@ export function EquipmentDetailPage() {
     setFieldErrors({});
     setNotice("");
     setMode(next);
+    if (searchParams.has("mode")) {
+      setSearchParams({}, { replace: true });
+    }
   }
 
   async function handleUpdateSubmit(e: FormEvent) {
@@ -800,7 +1230,9 @@ export function EquipmentDetailPage() {
       setEquipment(updated);
       setRetireReason("");
       setMode("NONE");
-      setNotice("Thiết bị đã được chuyển sang trạng thái Ngưng sử dụng vĩnh viễn.");
+      setNotice(
+        "Thiết bị đã được chuyển sang trạng thái Ngưng sử dụng vĩnh viễn (RETIRED). Theo quy tắc BR04, thiết bị chỉ cho phép tra cứu lịch sử.",
+      );
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.body.fieldErrors) setFieldErrors(err.body.fieldErrors);
@@ -899,14 +1331,6 @@ export function EquipmentDetailPage() {
 
       {notice && <Notice>{notice}</Notice>}
 
-      {isRetired && (
-        <Notice>
-          Thiết bị đã <strong>Ngưng sử dụng vĩnh viễn (RETIRED)</strong>. Theo
-          quy tắc nghiệp vụ <code>BR04</code>, thiết bị đã thanh lý chỉ cho phép
-          tra cứu lịch sử và không thể chỉnh sửa hoặc kích hoạt lại.
-        </Notice>
-      )}
-
       {mode === "EDIT" && !isRetired && (
         <section className="panel" style={{ marginBottom: "1.5rem" }}>
           <h2 style={{ marginTop: 0 }}>
@@ -932,27 +1356,28 @@ export function EquipmentDetailPage() {
                 <FieldError id="err-edit-name" message={fieldErrors.name} />
               </div>
 
-              <div className="field">
-                <label htmlFor="edit-eq-zone">Khu vực đặt máy (Zone) *</label>
-                <input
-                  id="edit-eq-zone"
-                  value={editForm.zone}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, zone: e.target.value })
-                  }
-                />
-                <FieldError id="err-edit-zone" message={fieldErrors.zone} />
-              </div>
+              <ZoneSelectorField
+                id="edit-eq-zone"
+                value={editForm.zone}
+                availableZones={availableZones}
+                onChange={(zone) => setEditForm({ ...editForm, zone })}
+                onAddZone={(newZone) =>
+                  setCustomZones((prev) => [...prev, newZone])
+                }
+                errorMessage={fieldErrors.zone}
+              />
 
               <div className="field">
-                <label htmlFor="edit-eq-purchased">Ngày nhập máy</label>
-                <input
+                <label htmlFor="edit-eq-purchased">
+                  Ngày nhập máy (dd/MM/yyyy)
+                </label>
+                <DateInputDdMmYyyy
                   id="edit-eq-purchased"
-                  type="date"
-                  value={editForm.purchasedAt}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, purchasedAt: e.target.value })
+                  valueIso={editForm.purchasedAt}
+                  onChangeIso={(purchasedAt) =>
+                    setEditForm({ ...editForm, purchasedAt })
                   }
+                  ariaInvalid={Boolean(fieldErrors.purchasedAt)}
                 />
                 <FieldError
                   id="err-edit-purchased"
@@ -961,14 +1386,16 @@ export function EquipmentDetailPage() {
               </div>
 
               <div className="field">
-                <label htmlFor="edit-eq-warranty">Hạn bảo hành</label>
-                <input
+                <label htmlFor="edit-eq-warranty">
+                  Hạn bảo hành (dd/MM/yyyy)
+                </label>
+                <DateInputDdMmYyyy
                   id="edit-eq-warranty"
-                  type="date"
-                  value={editForm.warrantyUntil}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, warrantyUntil: e.target.value })
+                  valueIso={editForm.warrantyUntil}
+                  onChangeIso={(warrantyUntil) =>
+                    setEditForm({ ...editForm, warrantyUntil })
                   }
+                  ariaInvalid={Boolean(fieldErrors.warrantyUntil)}
                 />
                 <FieldError
                   id="err-edit-warranty"
@@ -998,7 +1425,7 @@ export function EquipmentDetailPage() {
               <button
                 type="button"
                 className="button outline"
-                onClick={() => setMode("NONE")}
+                onClick={() => openMode("NONE")}
               >
                 Hủy
               </button>
@@ -1078,7 +1505,7 @@ export function EquipmentDetailPage() {
               <button
                 type="button"
                 className="button outline"
-                onClick={() => setMode("NONE")}
+                onClick={() => openMode("NONE")}
               >
                 Hủy
               </button>
@@ -1158,7 +1585,7 @@ export function EquipmentDetailPage() {
               <button
                 type="button"
                 className="button outline"
-                onClick={() => setMode("NONE")}
+                onClick={() => openMode("NONE")}
               >
                 Hủy
               </button>
@@ -1204,7 +1631,7 @@ export function EquipmentDetailPage() {
               <button
                 type="button"
                 className="button outline"
-                onClick={() => setMode("NONE")}
+                onClick={() => openMode("NONE")}
               >
                 Hủy
               </button>
@@ -1248,6 +1675,18 @@ export function EquipmentDetailPage() {
               <dt>Trạng thái hiện tại</dt>
               <dd>
                 <EquipmentStatusBadge status={equipment.status} />
+                {isRetired && (
+                  <div
+                    style={{
+                      marginTop: "0.35rem",
+                      fontSize: "0.82rem",
+                      color: "#64748b",
+                    }}
+                  >
+                    Chỉ tra cứu lịch sử, đã khóa chỉnh sửa vĩnh viễn (
+                    <code>BR04</code>).
+                  </div>
+                )}
               </dd>
             </div>
             <div>
@@ -1266,7 +1705,7 @@ export function EquipmentDetailPage() {
         </section>
 
         <section
-          className="panel"
+          className="panel qr-label-panel"
           aria-label="Tem QR định danh tĩnh"
           style={{
             display: "flex",
@@ -1275,12 +1714,18 @@ export function EquipmentDetailPage() {
           }}
         >
           <div>
-            <h2 style={{ marginTop: 0 }}>Tem QR định danh tĩnh (In dán máy)</h2>
-            <p style={{ color: "#64748b", fontSize: "0.9rem" }}>
+            <h2 className="no-print" style={{ marginTop: 0 }}>
+              Tem QR định danh tĩnh (In dán máy)
+            </h2>
+            <p
+              className="no-print"
+              style={{ color: "#64748b", fontSize: "0.9rem" }}
+            >
               Dùng để dán trực tiếp lên thân máy phục vụ kiểm kê và tra cứu
               nhanh lịch sử bảo trì.
             </p>
             <div
+              className="printable-qr-label"
               style={{
                 border: "2px dashed #94a3b8",
                 borderRadius: "12px",
@@ -1290,22 +1735,10 @@ export function EquipmentDetailPage() {
                 margin: "1rem 0",
               }}
             >
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "84px",
-                  height: "84px",
-                  borderRadius: "10px",
-                  background: "#0f172a",
-                  color: "#ffffff",
-                  marginBottom: "0.75rem",
-                }}
-              >
-                <QrCode size={52} aria-hidden="true" />
+              <div style={{ marginBottom: "0.75rem" }}>
+                <QrCodeGraphic payload={equipment.qrCodePayload} size={156} />
               </div>
-              <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>
+              <div style={{ fontWeight: 700, fontSize: "1.15rem" }}>
                 {equipment.code}
               </div>
               <div style={{ color: "#334155", marginTop: "0.2rem" }}>
@@ -1335,7 +1768,7 @@ export function EquipmentDetailPage() {
             </div>
           </div>
 
-          <div>
+          <div className="no-print">
             <button
               type="button"
               className="button outline"

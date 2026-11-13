@@ -184,7 +184,10 @@ export class CheckInsService {
       const session = await this.session(tx, header, "MEMBER");
       const p = await tx.memberProfile.findUnique({
         where: { userId: session.userId },
-        include: { user: true, memberships: { include: { payment: true } } },
+        include: {
+          user: true,
+          memberships: { include: { payment: true, freezePeriods: true } },
+        },
       });
       if (!p)
         fail(
@@ -339,7 +342,7 @@ export class CheckInsService {
                 where: { id: profile.id },
                 include: {
                   user: true,
-                  memberships: { include: { payment: true } },
+                  memberships: { include: { payment: true, freezePeriods: true } },
                 },
               });
               const now = this.now();

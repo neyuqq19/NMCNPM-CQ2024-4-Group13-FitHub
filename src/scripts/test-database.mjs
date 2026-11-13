@@ -30,6 +30,8 @@ for (const args of [
     "test/check-ins.test.ts",
     "test/sales.test.ts",
     "test/equipments.test.ts",
+    "test/equipments-di.test.ts",
+    "test/packages-memberships.test.ts",
     "test/trainers.test.ts",
     "test/working-slots.test.ts",
     "src/trainers/__tests__/trainers.service.spec.ts",

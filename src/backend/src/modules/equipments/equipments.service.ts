@@ -1,8 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
-  Injectable,
   Inject,
+  Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import type {
@@ -305,7 +305,8 @@ export class EquipmentsService {
       });
     }
 
-    const purchasedAt = parseOptionalDate(body.purchasedAt, "purchasedAt") ?? null;
+    const purchasedAt =
+      parseOptionalDate(body.purchasedAt, "purchasedAt") ?? null;
     const warrantyUntil =
       parseOptionalDate(body.warrantyUntil, "warrantyUntil") ?? null;
     if (purchasedAt && warrantyUntil && warrantyUntil < purchasedAt) {
@@ -700,8 +701,7 @@ export class EquipmentsService {
         data: {
           equipmentId: id,
           actorId,
-          action:
-            nextStatus === "RETIRED" ? "RETIRED" : "MAINTENANCE_RESOLVED",
+          action: nextStatus === "RETIRED" ? "RETIRED" : "MAINTENANCE_RESOLVED",
           fromStatus: "OUT_OF_ORDER",
           toStatus: nextStatus,
           note: resolutionNote,
@@ -800,4 +800,3 @@ export class EquipmentsService {
     return this.detail(id);
   }
 }
-
