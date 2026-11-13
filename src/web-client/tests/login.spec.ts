@@ -12,7 +12,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await page.goto("/#/login");
     await expect(
-      page.getByRole("heading", { name: "Đăng nhập quản trị", exact: true }),
+      page.getByRole("heading", { name: "Đăng nhập nhân viên", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByLabel("Email hoặc số điện thoại", { exact: true }),
@@ -128,23 +128,23 @@ test("Admin login: wrong password and network failure retain input; pending requ
   expect(requests).toBe(1);
 });
 
-test("Admin login: non-admin account is rejected and its session cleared", async ({
+test("Admin login: member account is rejected and its session cleared", async ({
   page,
 }) => {
   await page.goto("/#/login");
   await page
     .getByLabel("Email hoặc số điện thoại", { exact: true })
-    .fill("trainer@fithub.vn");
+    .fill("hoangnam@example.com");
   await page.getByLabel("Mật khẩu", { exact: true }).fill("FitHubDemo!2026");
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "Chỉ Admin có quyền quản lý hội viên.",
+    "Tài khoản Hội viên chỉ sử dụng trên ứng dụng FitHub Mobile.",
   );
   expect(
     await page.evaluate(() => sessionStorage.getItem("fithub_token")),
   ).toBeNull();
   await expect(
-    page.getByRole("heading", { name: "Đăng nhập quản trị", exact: true }),
+    page.getByRole("heading", { name: "Đăng nhập nhân viên", exact: true }),
   ).toBeVisible();
 });
 

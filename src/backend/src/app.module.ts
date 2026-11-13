@@ -8,6 +8,7 @@ import { CheckInsModule } from './modules/check-ins/check-ins.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { EquipmentsModule } from './modules/equipments/equipments.module';
+import { TrainersModule } from './modules/trainers/trainers.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { EquipmentsModule } from './modules/equipments/equipments.module';
     SalesModule,
     MembershipsModule,
     EquipmentsModule,
+    TrainersModule,
   ],
   controllers: [AppController],
 })

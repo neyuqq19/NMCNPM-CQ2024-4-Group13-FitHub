@@ -33,6 +33,7 @@ import type {
 } from "@fithub/contracts";
 import { clearSession, loadSession, saveSession } from "./src/session";
 import { HomePanel } from "./src/HomePanel";
+import { PtBookingPanel } from "./src/PtBookingPanel";
 import { CheckInPanel } from "./src/CheckInPanel";
 import { AuthPanel } from "./src/AuthPanel";
 import { SPORTS_IMAGES } from "./src/sportsImages";
@@ -586,6 +587,13 @@ export default function App() {
             baseUrl={apiBaseUrl}
             progressRequest={progressRequest}
             onNavigate={setScreen}
+          />
+        )}
+        {screen === "10_TRAINERS" && session && (
+          <PtBookingPanel
+            baseUrl={apiBaseUrl}
+            token={session.accessToken}
+            onBack={() => setScreen("01_HOME")}
           />
         )}
 

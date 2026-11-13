@@ -35,14 +35,8 @@ CREATE TABLE "FreezePeriod" (
   "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
   CONSTRAINT "FreezePeriod_pkey" PRIMARY KEY ("id"),
-  CONSTRAINT "freeze_days_valid" CHECK (
-    ("status" = 'ACTIVE' AND "days" >= 7 AND "days" <= 30)
-    OR ("status" = 'ENDED' AND "days" >= 0 AND "days" <= 30)
-  ),
-  CONSTRAINT "freeze_period_valid" CHECK (
-    ("status" = 'ACTIVE' AND "endsBefore" > "startsOn")
-    OR ("status" = 'ENDED' AND "endsBefore" >= "startsOn")
-  ),
+  CONSTRAINT "freeze_days_valid" CHECK ("days" >= 7 AND "days" <= 30),
+  CONSTRAINT "freeze_period_valid" CHECK ("endsBefore" > "startsOn"),
   CONSTRAINT "freeze_reason_required" CHECK (length(btrim("reason")) > 0),
   CONSTRAINT "FreezePeriod_membershipId_fkey" FOREIGN KEY ("membershipId") REFERENCES "Membership"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT "FreezePeriod_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE
@@ -52,22 +46,17 @@ CREATE TABLE "FreezePeriod" (
 CREATE INDEX "FreezePeriod_membershipId_status_idx" ON "FreezePeriod"("membershipId", "status");
 CREATE UNIQUE INDEX "FreezePeriod_one_active_per_membership" ON "FreezePeriod"("membershipId") WHERE "status" = 'ACTIVE';
 
--- Preserve purchased terms while allowing controlled SCHEDULED shifts during freeze/unfreeze transactions
+-- Preserve purchased terms while allowing controlled SCHEDULED shifts during freeze transactions
 CREATE OR REPLACE FUNCTION fithub_membership_snapshot() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF EXISTS (SELECT 1 FROM "Payment" WHERE "membershipId" = OLD."id" AND "status" = 'CONFIRMED') THEN
-    IF (NEW."memberId", NEW."packageId", NEW."packageNameSnapshot", NEW."priceSnapshot", NEW."durationMonthsSnapshot", NEW."grantsGymAccessSnapshot", NEW."code", NEW."requestId")
+    IF (NEW."memberId", NEW."packageId", NEW."packageNameSnapshot", NEW."priceSnapshot", NEW."durationMonthsSnapshot", NEW."grantsGymAccessSnapshot", NEW."ptSessionsSnapshot", NEW."code", NEW."requestId")
       IS DISTINCT FROM
-      (OLD."memberId", OLD."packageId", OLD."packageNameSnapshot", OLD."priceSnapshot", OLD."durationMonthsSnapshot", OLD."grantsGymAccessSnapshot", OLD."code", OLD."requestId") THEN
+      (OLD."memberId", OLD."packageId", OLD."packageNameSnapshot", OLD."priceSnapshot", OLD."durationMonthsSnapshot", OLD."grantsGymAccessSnapshot", OLD."ptSessionsSnapshot", OLD."code", OLD."requestId") THEN
       RAISE EXCEPTION 'Purchased membership terms must be preserved' USING ERRCODE = '23514';
     END IF;
-    IF NEW."ptSessionsSnapshot" IS DISTINCT FROM OLD."ptSessionsSnapshot" THEN
-      IF NOT (current_setting('fithub.allow_pt_compensation', true) = 'on' AND NEW."ptSessionsSnapshot" >= OLD."ptSessionsSnapshot") THEN
-        RAISE EXCEPTION 'Purchased membership terms must be preserved' USING ERRCODE = '23514';
-      END IF;
-    END IF;
     IF NEW."startsOn" IS DISTINCT FROM OLD."startsOn" THEN
-      IF NOT (OLD."status" = 'SCHEDULED' AND NEW."status" IN ('SCHEDULED', 'ACTIVE') AND current_setting('fithub.allow_schedule_shift', true) = 'on') THEN
+      IF NOT (OLD."status" = 'SCHEDULED' AND NEW."status" = 'SCHEDULED' AND NEW."startsOn" > OLD."startsOn" AND current_setting('fithub.allow_schedule_shift', true) = 'on') THEN
         RAISE EXCEPTION 'Purchased membership terms must be preserved' USING ERRCODE = '23514';
       END IF;
     END IF;

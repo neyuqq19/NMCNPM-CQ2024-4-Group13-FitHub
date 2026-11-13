@@ -19,11 +19,13 @@
 * {
   box-sizing: border-box;
 }
+html,
 body {
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
   overflow-x: hidden;
+  max-width: 100vw;
 }
 button,
 input,
@@ -356,14 +358,17 @@ input:focus {
 .table-wrap {
   overflow-x: auto;
   max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
   margin-bottom: 14px;
+  -webkit-overflow-scrolling: touch;
 }
 table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 14px;
-  white-space: nowrap;
+  white-space: normal;
 }
 th {
   font-weight: 500;
@@ -1295,19 +1300,36 @@ button.member-action {
 }
 
 /* Light admin shell; authentication keeps its own layout. */
+.app-shell {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+}
 .app-shell.is-collapsed {
   --sidebar-width: var(--sidebar-collapsed-width);
 }
 .app-shell .topbar {
   margin-left: var(--sidebar-width);
-  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  width: calc(100% - var(--sidebar-width));
+  max-width: calc(100% - var(--sidebar-width));
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .app-shell .topbar-brand {
   width: auto;
 }
 .app-shell .sidebar {
+  position: fixed;
+  left: 0;
   top: 0;
-  z-index: 25;
+  bottom: 0;
+  width: var(--sidebar-width);
+  z-index: 40;
   background: #fff;
   color: #52617b;
   border-right: 1px solid #e3e8f0;
@@ -1444,15 +1466,24 @@ button.member-action {
 }
 
 .app-shell .main-content {
+  margin-left: var(--sidebar-width);
+  width: calc(100% - var(--sidebar-width));
+  max-width: calc(100% - var(--sidebar-width));
+  box-sizing: border-box;
   background: linear-gradient(135deg, #fbfcfe, #f4f7fb);
   overflow-x: hidden;
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 @media (max-width: 680px) {
   .app-shell.is-collapsed {
     --sidebar-width: 300px;
   }
-  .app-shell .topbar {
+  .app-shell .topbar,
+  .app-shell .main-content {
     margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+    transition: none;
   }
   .app-shell .sidebar {
     top: var(--header);
@@ -1556,6 +1587,23 @@ button.member-action {
   font-size: 13.5px;
   color: #475569;
 }
+.table.equipment-table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: auto;
+}
+.table.equipment-table th,
+.table.equipment-table td {
+  white-space: normal;
+}
+.table.equipment-table th:first-child,
+.table.equipment-table td:first-child,
+.table.equipment-table th:nth-child(5),
+.table.equipment-table td:nth-child(5),
+.table.equipment-table th:last-child,
+.table.equipment-table td:last-child {
+  white-space: nowrap;
+}
 @media (max-width: 860px) {
   .equipment-filter-row-1 {
     grid-template-columns: 1fr;
@@ -1590,4 +1638,62 @@ button.member-action {
   .no-print {
     display: none !important;
   }
+}
+
+.trainer-tags, .trainer-specialty {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.trainer-tags .badge {
+  border-radius: 8px;
+  background: var(--input);
+  padding: 3px 8px;
+}
+.trainer-fields {
+  border: 0;
+  padding: 0;
+  margin: 0 0 14px;
+  min-width: 0;
+}
+.trainer-fields > .field, .trainer-fields legend, .trainer-specialty {
+  margin-bottom: 10px;
+}
+.trainer-avatar {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.trainer-bio {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.slot-controls, .slot-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin: 10px 0;
+}
+.slot-preview {
+  padding: 0;
+  list-style: none;
+}
+.slot-preview li {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #e0f4e8;
+  color: #185332;
+}
+.slot-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: min(420px, 90vw);
+}
+.slot-dialog::backdrop {
+  background: rgb(15 23 42 / 55%);
 }
