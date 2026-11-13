@@ -1,6 +1,9 @@
-import type { Membership, Payment } from "@prisma/client";
+import type { FreezePeriod, Membership, Payment } from "@prisma/client";
 
-export type PurchasedMembership = Membership & { payment: Payment | null };
+export type PurchasedMembership = Membership & {
+  payment: Payment | null;
+  freezePeriods?: FreezePeriod[];
+};
 export const COOLDOWN_MS = 10 * 60 * 1000;
 export function gymClock(now: Date) {
   const local = new Date(now.getTime() + 7 * 3600 * 1000);
@@ -8,6 +11,37 @@ export function gymClock(now: Date) {
     day: local.toISOString().slice(0, 10),
     minute: local.getUTCHours() * 60 + local.getUTCMinutes(),
   };
+}
+export function effectiveMembershipStatus(
+  m: {
+    status: Membership["status"];
+    startsOn: Date;
+    endsBefore: Date;
+    freezePeriods?: Pick<FreezePeriod, "status" | "startsOn" | "endsBefore">[];
+  },
+  day: string,
+): Membership["status"] {
+  if (m.status === "CANCELLED" || m.status === "PENDING_PAYMENT") {
+    return m.status;
+  }
+  const start = m.startsOn.toISOString().slice(0, 10);
+  const end = m.endsBefore.toISOString().slice(0, 10);
+  if (m.freezePeriods && m.freezePeriods.length > 0) {
+    const activeFreezeCoveringToday = m.freezePeriods.some(
+      (f) =>
+        f.status === "ACTIVE" &&
+        f.startsOn.toISOString().slice(0, 10) <= day &&
+        day < f.endsBefore.toISOString().slice(0, 10),
+    );
+    if (activeFreezeCoveringToday) return "FROZEN";
+    if (end <= day) return "EXPIRED";
+    if (start <= day) return "ACTIVE";
+    return "SCHEDULED";
+  }
+  if (m.status === "FROZEN") return "FROZEN";
+  if (end <= day) return "EXPIRED";
+  if (start <= day) return "ACTIVE";
+  return "SCHEDULED";
 }
 export function eligibleMembership(list: PurchasedMembership[], now: Date) {
   const { day, minute } = gymClock(now);
@@ -18,7 +52,7 @@ export function eligibleMembership(list: PurchasedMembership[], now: Date) {
   );
   const paid = current.filter(
     (m) =>
-      ["ACTIVE", "SCHEDULED"].includes(m.status) &&
+      ["ACTIVE", "SCHEDULED"].includes(effectiveMembershipStatus(m, day)) &&
       m.payment?.status === "CONFIRMED" &&
       m.grantsGymAccessSnapshot,
   );
@@ -44,7 +78,7 @@ export function eligibleMembership(list: PurchasedMembership[], now: Date) {
       message:
         "Ngoài giờ sử dụng gói tập. Giờ thường: 05:30–22:00; thấp điểm: 09:00–16:00.",
     };
-  if (current.some((m) => m.status === "FROZEN"))
+  if (current.some((m) => effectiveMembershipStatus(m, day) === "FROZEN"))
     return { code: "MEMBERSHIP_FROZEN", message: "Gói tập đang bảo lưu." };
   if (current.some((m) => m.status === "PENDING_PAYMENT"))
     return {

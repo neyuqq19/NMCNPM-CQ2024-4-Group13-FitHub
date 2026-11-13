@@ -20,6 +20,7 @@ import {
   ScanLine,
   ChevronLeft,
   ChevronRight,
+  Package,
 } from "lucide-react";
 import { Brand, Notice, PageHeading } from "./components";
 import { AdminLogin } from "./pages/AdminLogin";
@@ -29,6 +30,7 @@ import { Dashboard } from "./pages/Dashboard";
 
 import { CheckInPage } from "./pages/CheckIn";
 import { MemberList, MemberDetail, MemberForm } from "./pages/Members";
+import { PackagesPage } from "./pages/Packages";
 import {
   PackagePage,
   PaymentPage,
@@ -154,6 +156,12 @@ function Shell({
                 <Users size={22} />
                 {!collapsed && <span>Hội viên</span>}
               </NavLink>
+              
+              <NavLink to="/packages" title={collapsed ? "Gói tập" : undefined}>
+                <Package size={22} />
+                {!collapsed && <span>Gói tập</span>}
+              </NavLink>
+              
               <NavLink
                 to="/check-in"
                 title={collapsed ? "Check-in" : undefined}
@@ -328,6 +336,7 @@ export function App() {
             <>
               <Route index element={<Home user={user!} />} />
               <Route path="check-in" element={<CheckInPage />} />
+              <Route path="packages" element={<PackagesPage />} />
               <Route path="members" element={<MemberList />} />
               <Route path="members/new" element={<MemberForm />} />
               <Route path="members/:id" element={<MemberDetail />} />

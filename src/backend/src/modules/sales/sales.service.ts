@@ -160,6 +160,8 @@ export class SalesService {
           price: Number(p.price),
           grantsGymAccess: p.grantsGymAccess,
           accessWindow: p.accessWindow,
+          ptSessionsIncluded: p.ptSessionsIncluded,
+          isActive: p.isActive,
         })),
         suggestedStartsOn:
           paid[0] && paid[0].endsBefore.toISOString().slice(0, 10) > today
@@ -255,7 +257,24 @@ export class SalesService {
               "Giá gói đã thay đổi. Tải lại danh mục trước khi xác nhận.",
             );
           const end = addMonths(body.startsOn, pack.durationMonths);
-          if (pack.grantsGymAccess) await this.checkOverlap(tx, id, start, end);
+          if (pack.grantsGymAccess) {
+            if (body.startsOn > today) {
+              const existingScheduled = await tx.membership.findFirst({
+                where: {
+                  memberId: id,
+                  grantsGymAccessSnapshot: true,
+                  status: "SCHEDULED",
+                },
+              });
+              if (existingScheduled) {
+                conflict(
+                  "SCHEDULED_LIMIT_REACHED",
+                  "Hội viên đã có 1 gói gia hạn chờ kích hoạt (SCHEDULED).",
+                );
+              }
+            }
+            await this.checkOverlap(tx, id, start, end);
+          }
           const [codes] = await tx.$queryRaw<
             { m: bigint; p: bigint }[]
           >`SELECT nextval('fithub_membership_code_seq') AS m, nextval('fithub_payment_code_seq') AS p`;
@@ -269,6 +288,8 @@ export class SalesService {
               durationMonthsSnapshot: pack.durationMonths,
               priceSnapshot: pack.price,
               grantsGymAccessSnapshot: pack.grantsGymAccess,
+              ptSessionsSnapshot: pack.ptSessionsIncluded,
+              ptSessionsRemaining: pack.ptSessionsIncluded,
               status: "PENDING_PAYMENT",
               startsOn: start,
               endsBefore: end,
@@ -444,7 +465,23 @@ export class SalesService {
                 "ORDER_EXPIRED",
                 "Thời hạn dự kiến của đăng ký đã kết thúc. Hủy và tạo đăng ký mới.",
               );
-            if (m.grantsGymAccessSnapshot)
+            if (m.grantsGymAccessSnapshot) {
+              if (m.startsOn.toISOString().slice(0, 10) > day) {
+                const existingScheduled = await tx.membership.findFirst({
+                  where: {
+                    id: { not: m.id },
+                    memberId: m.memberId,
+                    grantsGymAccessSnapshot: true,
+                    status: "SCHEDULED",
+                  },
+                });
+                if (existingScheduled) {
+                  conflict(
+                    "SCHEDULED_LIMIT_REACHED",
+                    "Hội viên đã có 1 gói gia hạn chờ kích hoạt (SCHEDULED).",
+                  );
+                }
+              }
               await this.checkOverlap(
                 tx,
                 m.memberId,
@@ -452,6 +489,7 @@ export class SalesService {
                 m.endsBefore,
                 m.id,
               );
+            }
             await tx.membership.update({
               where: { id: m.id },
               data: {
