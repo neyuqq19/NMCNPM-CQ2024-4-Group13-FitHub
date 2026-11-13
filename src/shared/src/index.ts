@@ -1,4 +1,5 @@
 export * from "./constants";
+export * from "./working-slots";
 
 export type Role = "ADMIN" | "TRAINER" | "MEMBER";
 export type Platform = "WEB" | "MOBILE";
@@ -272,7 +273,10 @@ export interface MyCheckInSummaryDto {
   week: { date: string; count: number }[];
 }
 
+export type TrainerWorkStatus = "ACTIVE" | "ON_LEAVE";
+
 export interface TrainerSummaryDto {
+  workStatus: TrainerWorkStatus;
   id: string;
   userId: string;
   trainerCode: string;
@@ -305,6 +309,7 @@ export interface TrainerProfileDto extends TrainerSummaryDto {
 }
 
 export interface UpdateTrainerProfileRequest {
+  workStatus?: TrainerWorkStatus;
   bio: string;
   specialties: string[];
   experienceYears: number;

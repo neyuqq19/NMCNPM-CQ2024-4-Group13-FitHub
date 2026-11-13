@@ -57,9 +57,17 @@ export function profileInput(body: unknown): UpdateTrainerProfileRequest {
     "bio",
     "specialties",
     "experienceYears",
+    "workStatus",
     "avatarUrl",
   ]);
   const errors: Record<string, string> = {};
+  const workStatus = b.workStatus;
+  if (
+    workStatus !== undefined &&
+    workStatus !== "ACTIVE" &&
+    workStatus !== "ON_LEAVE"
+  )
+    errors.workStatus = "Trạng thái làm việc không hợp lệ.";
   const bio = typeof b.bio === "string" ? b.bio.trim() : "";
   if (!completeBio(bio)) errors.bio = "Tiểu sử phải có từ 1 đến 1000 ký tự.";
   const specialties = completeSpecialties(b.specialties)
@@ -91,6 +99,9 @@ export function profileInput(body: unknown): UpdateTrainerProfileRequest {
     bio,
     specialties,
     experienceYears: years as number,
+    ...(workStatus === "ACTIVE" || workStatus === "ON_LEAVE"
+      ? { workStatus }
+      : {}),
     ...(b.avatarUrl !== undefined ? { avatarUrl: avatarUrl || null } : {}),
   };
 }

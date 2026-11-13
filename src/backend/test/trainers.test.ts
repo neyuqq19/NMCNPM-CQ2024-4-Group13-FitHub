@@ -10,6 +10,7 @@ import { AppModule } from "../src/app.module";
 import { AllExceptionsFilter } from "../src/common/filters/http-exception.filter";
 import { hashPassword } from "../src/modules/auth/password";
 import { gymClock } from "../src/modules/check-ins/eligibility";
+import { WorkingSlotsService } from "../src/modules/trainers/working-slots.service";
 
 const url = new URL(process.env.DATABASE_URL || "postgresql://invalid/invalid");
 if (
@@ -77,6 +78,10 @@ before(async () => {
 after(async () => {
   await db.auditLog.deleteMany({ where: { actorId: { in: users } } });
   await db.authEvent.deleteMany({ where: { userId: { in: users } } });
+  await db.workingSlot.deleteMany({
+    where: { trainer: { userId: { in: users } } },
+  });
+  await db.memberProfile.deleteMany({ where: { userId: { in: users } } });
   await db.user.deleteMany({ where: { id: { in: users } } });
   await app?.close();
   await db.$disconnect();
@@ -122,6 +127,7 @@ test("UC06 only owners may edit, drafts stay private, invalid fields cannot chan
     experienceYears: [-1, 51, 1.5, "3"],
     version: [null, -1, "0"],
     avatarUrl: ["javascript:void(0)"],
+    workStatus: ["LOCKED", null],
   })) {
     for (const value of invalid) {
       const res = await save(trainer, { ...profile, [key]: value });
@@ -193,6 +199,25 @@ test("UC06 concurrent profile writes, directory filters, certificates and audit 
     .expect(200);
   assert.deepEqual(reread.body, added.body);
   assert.equal((await list(member)).body.items[0].certificationCount, 1);
+  const edit = (auth: string, changes: object, certId: string = stored.id) =>
+    api
+      .patch(base + "/me/certifications/" + certId)
+      .set("Authorization", auth)
+      .send({ ...cert, version: 2, ...changes });
+  await edit(other, { version: 0 }).expect(403);
+  await edit(member, {}).expect(403);
+  await edit(trainer, { version: 1 }).expect(409);
+  await edit(trainer, { issuedAt: "2025-02-30" }).expect(400);
+  await edit(trainer, {}, randomUUID()).expect(404);
+  const revised = {
+    name: "ACE CPT",
+    issuer: "ACE",
+    issuedAt: "2025-06-01",
+    credentialUrl: null,
+  };
+  const edited = await edit(trainer, revised).expect(200);
+  assert.equal(edited.body.version, 3);
+  assert.deepEqual(edited.body.certifications, [{ id: stored.id, ...revised }]);
   const remove = (auth: string, version: number) =>
     api
       .delete(base + "/me/certifications/" + stored.id)
@@ -205,13 +230,13 @@ test("UC06 concurrent profile writes, directory filters, certificates and audit 
     0,
   );
   await remove(trainer, 1).expect(409);
-  const deleted = await remove(trainer, 2).expect(200);
-  assert.equal(deleted.body.version, 3);
+  const deleted = await remove(trainer, 3).expect(200);
+  assert.equal(deleted.body.version, 4);
   assert.deepEqual(deleted.body.certifications, []);
-  await remove(trainer, 3).expect(404);
+  await remove(trainer, 4).expect(404);
   assert.equal(
     (await db.trainerProfile.findUniqueOrThrow({ where: { id } })).version,
-    3,
+    4,
   );
   const logs = await db.auditLog.findMany({
     where: { entityId: id, actorId: actor },
@@ -222,7 +247,211 @@ test("UC06 concurrent profile writes, directory filters, certificates and audit 
     [
       "UPDATE_TRAINER_PROFILE",
       "ADD_TRAINER_CERTIFICATION",
+      "UPDATE_TRAINER_CERTIFICATION",
       "DELETE_TRAINER_CERTIFICATION",
     ],
+  );
+});
+
+test("UC07 atomic registration, buffer, private weekly view, future availability and 24-hour cutoff", async () => {
+  const service = app.get(WorkingSlotsService);
+  const date = "2032-06-03";
+  const now = new Date("2032-06-02T08:00:00+07:00");
+  service.now = () => now;
+  const range = { date, startTime: "08:00", endTime: "12:00" };
+  const register = (body: object, token = trainer) =>
+    api
+      .post(base + "/me/availability")
+      .set("Authorization", token)
+      .send(body);
+  const day = (target: string, token: string) =>
+    api
+      .get(base + "/" + target + "/slots")
+      .query({ from: date, to: date })
+      .set("Authorization", token);
+  const available = () =>
+    api
+      .get(base + "/" + id + "/available-slots")
+      .query({ date })
+      .set("Authorization", member);
+  const change = (
+    slot: string,
+    status: string,
+    reason?: string,
+    token = trainer,
+  ) =>
+    api
+      .patch(base + "/me/slots/" + slot + "/availability")
+      .set("Authorization", token)
+      .send({ status, reason });
+  const erase = (slot: string) =>
+    api.delete(base + "/me/slots/" + slot).set("Authorization", trainer);
+  await register(range, admin).expect(403);
+  await register(range, member).expect(403);
+  for (const values of [
+    { date: "2032-06-01" },
+    { date: "2032-02-30" },
+    { startTime: "05:59" },
+    { endTime: "22:01" },
+    { startTime: "9:broken" },
+    { startTime: null },
+  ])
+    await register({ ...range, ...values }).expect(400);
+  assert.equal(
+    (await register({ ...range, endTime: "08:45" }).expect(400)).body.code,
+    "RANGE_TOO_SHORT",
+  );
+  const race = await Promise.all([register(range), register(range)]);
+  assert.deepEqual(race.map((r) => r.status).sort(), [201, 409]);
+  assert.equal(race.find((r) => r.status === 409)!.body.code, "SLOT_OVERLAP");
+  const created = race.find((r) => r.status === 201)!.body;
+  assert.equal(created.discardedMinutes, 30);
+  const [a, b, c] = created.slots;
+  assert.equal(a.startTime, "2032-06-03T01:00:00.000Z");
+  assert.equal(c.endTime, "2032-06-03T04:30:00.000Z");
+  assert.equal(
+    (
+      await register({ ...range, startTime: "11:44", endTime: "12:44" }).expect(
+        409,
+      )
+    ).body.code,
+    "SLOT_OVERLAP",
+  );
+  // A caller bypassing the API still cannot insert into another slot's rest period.
+  await assert.rejects(
+    db.$executeRaw`INSERT INTO "WorkingSlot" (id, "trainerId", "workDate", "startTime", "endTime")
+      VALUES (gen_random_uuid(), ${id}::uuid, ${date}::date,
+        ${date + "T11:44:00+07:00"}::timestamptz, ${date + "T12:44:00+07:00"}::timestamptz)`,
+    (error: unknown) =>
+      (error as { meta?: { code?: string } }).meta?.code === "23P01",
+  );
+  const extended = await register({
+    ...range,
+    startTime: "11:45",
+    endTime: "12:45",
+  }).expect(201);
+  assert.equal(extended.body.slots.length, 1);
+  await change(a.id, "UNAVAILABLE", "Bận họp", other).expect(403);
+  await change(a.id, "UNAVAILABLE", "Bận họp", admin).expect(403);
+  await change(a.id, "BOOKED").expect(400);
+  await change(randomUUID(), "OPEN").expect(404);
+  const busy = await change(a.id, "UNAVAILABLE", "  Bận họp  ").expect(200);
+  assert.equal(busy.body.unavailableReason, "Bận họp");
+  const reopened = await change(a.id, "OPEN").expect(200);
+  assert.equal(reopened.body.unavailableReason, null);
+  now.setTime(now.getTime() + 1);
+  assert.equal(
+    (await change(a.id, "UNAVAILABLE", "Họp").expect(400)).body.code,
+    "NOTICE_TOO_LATE",
+  );
+  assert.equal((await erase(a.id).expect(400)).body.code, "NOTICE_TOO_LATE");
+  await change(c.id, "UNAVAILABLE", "Họp").expect(200);
+  const memberUser = await db.user.findUniqueOrThrow({
+    where: { email: run + "member@example.com" },
+  });
+  const bookedMember = await db.memberProfile.create({
+    data: { userId: memberUser.id, memberCode: "TEST-" + run },
+  });
+  await db.workingSlot.update({
+    where: { id: b.id },
+    data: { status: "BOOKED", memberId: bookedMember.id },
+  });
+  assert.equal(
+    (await change(b.id, "UNAVAILABLE", "Họp").expect(409)).body.code,
+    "SLOT_ALREADY_BOOKED",
+  );
+  assert.equal(
+    (await erase(b.id).expect(409)).body.code,
+    "SLOT_ALREADY_BOOKED",
+  );
+  await day(id, other).expect(403);
+  await day(id, member).expect(403);
+  for (const [target, token] of [
+    ["me", trainer],
+    [id, admin],
+  ]) {
+    const view = await day(target, token).expect(200);
+    assert.deepEqual(
+      view.body.map((s: { status: string }) => s.status),
+      ["OPEN", "BOOKED", "UNAVAILABLE", "OPEN"],
+    );
+    assert.deepEqual(view.body[1].member, {
+      memberCode: bookedMember.memberCode,
+      displayName: memberUser.displayName,
+    });
+  }
+  await erase(extended.body.slots[0].id).expect(204);
+  await erase(extended.body.slots[0].id).expect(404);
+  // Legacy or externally written rows must never reveal a private reason on UC08.
+  await db.workingSlot.update({
+    where: { id: a.id },
+    data: { unavailableReason: "Lý do riêng tư" },
+  });
+  const open = await available().expect(200);
+  assert.deepEqual(
+    open.body.map((s: { id: string }) => s.id),
+    [a.id],
+  );
+  assert.equal(open.body[0].member, null);
+  assert.equal(open.body[0].unavailableReason, null);
+  const beforeLeave = (
+    await api
+      .get(base + "/me")
+      .set("Authorization", trainer)
+      .expect(200)
+  ).body;
+  const leave = await save(trainer, {
+    ...profile,
+    version: beforeLeave.version,
+    workStatus: "ON_LEAVE",
+  }).expect(200);
+  assert.equal(leave.body.accountStatus, "ACTIVE");
+  assert.equal(leave.body.workStatus, "ON_LEAVE");
+  assert.deepEqual((await available().expect(200)).body, []);
+  const preserved = await save(trainer, {
+    ...profile,
+    version: leave.body.version,
+  }).expect(200);
+  assert.equal(preserved.body.workStatus, "ON_LEAVE");
+  await day("me", trainer).expect(200);
+  const relogin = await api
+    .post("/api/auth/login")
+    .send({
+      identifier: run + "owner@example.com",
+      password,
+      platform: "WEB",
+      deviceId: randomUUID(),
+      requestId: randomUUID(),
+    })
+    .expect(200);
+  trainer = "Bearer " + relogin.body.accessToken;
+  await save(trainer, {
+    ...profile,
+    version: preserved.body.version,
+    workStatus: "ACTIVE",
+  }).expect(200);
+  assert.deepEqual(
+    (await available().expect(200)).body.map((s: { id: string }) => s.id),
+    [a.id],
+  );
+  await db.user.update({ where: { id: actor }, data: { status: "LOCKED" } });
+  assert.deepEqual((await available().expect(200)).body, []);
+  await db.user.update({ where: { id: actor }, data: { status: "ACTIVE" } });
+  now.setTime(Date.parse(a.startTime));
+  assert.deepEqual((await available().expect(200)).body, []);
+  const logs = await db.auditLog.findMany({
+    where: { actorId: actor, entityType: "WorkingSlot" },
+  });
+  assert.equal(
+    logs.filter((l) => l.action === "REGISTER_WORKING_SLOT").length,
+    4,
+  );
+  assert.equal(
+    logs.filter((l) => l.action === "SET_SLOT_AVAILABILITY").length,
+    3,
+  );
+  assert.equal(
+    logs.filter((l) => l.action === "DELETE_WORKING_SLOT").length,
+    1,
   );
 });

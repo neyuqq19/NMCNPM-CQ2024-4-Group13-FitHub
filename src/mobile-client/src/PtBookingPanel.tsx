@@ -15,6 +15,7 @@ import type {
   TrainerListResponse,
   TrainerProfileDto,
   TrainerSummaryDto,
+  WorkingSlotDto,
 } from "@fithub/contracts";
 import { mobileRequest } from "./api";
 import { C } from "./theme";
@@ -75,12 +76,64 @@ function Summary({ trainer }: { trainer: TrainerSummaryDto }) {
       )}
       <View style={s.summary}>
         <Text style={s.name}>{trainer.displayName}</Text>
+        <Text style={s.meta}>Lĩnh vực chuyên môn</Text>
         <Text style={s.text}>{trainer.specialties.join(" · ")}</Text>
         <Text style={s.meta}>
           {trainer.experienceYears} năm kinh nghiệm ·{" "}
           {trainer.certificationCount} chứng chỉ
         </Text>
       </View>
+    </View>
+  );
+}
+
+const hourInVietnam = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+function AvailableSlots({ id, ...connection }: Connection & { id: string }) {
+  const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  const [date, setDate] = useState(today);
+  const { data, error, retry } = useTrainerRequest<WorkingSlotDto[]>(
+    connection,
+    `/api/trainers/${encodeURIComponent(id)}/available-slots?date=${date}`,
+  );
+  function changeDay(days: number) {
+    setDate((current) => {
+      const day = new Date(current + "T00:00:00Z");
+      day.setUTCDate(day.getUTCDate() + days);
+      return day.toISOString().slice(0, 10);
+    });
+  }
+  return (
+    <View style={s.card}>
+      <Text style={s.name}>Ca trống</Text>
+      <Text style={s.text}>
+        {date.split("-").reverse().join("/")} · Giờ Việt Nam
+      </Text>
+      <View style={s.row}>
+        {date > today && (
+          <Action label="Ngày trước" onPress={() => changeDay(-1)} />
+        )}
+        <Action label="Ngày sau" onPress={() => changeDay(1)} />
+      </View>
+      {data ? (
+        data.length ? (
+          data.map((slot) => (
+            <Text style={s.text} key={slot.id}>
+              {hourInVietnam.format(new Date(slot.startTime))} –{" "}
+              {hourInVietnam.format(new Date(slot.endTime))}
+            </Text>
+          ))
+        ) : (
+          <Text style={s.meta}>Chưa có ca trống trong ngày này.</Text>
+        )
+      ) : (
+        <RequestStatus error={error} retry={retry} />
+      )}
     </View>
   );
 }
@@ -106,8 +159,10 @@ function TrainerDetail({
             <>
               <View style={s.card}>
                 <Summary trainer={data} />
+                <Text style={s.meta}>Giới thiệu bản thân</Text>
                 <Text style={s.text}>{data.bio}</Text>
               </View>
+              <AvailableSlots {...connection} id={id} />
               <Text style={s.name}>Chứng chỉ hành nghề</Text>
               {!data.certifications.length && (
                 <Text style={s.meta}>Chưa có chứng chỉ.</Text>

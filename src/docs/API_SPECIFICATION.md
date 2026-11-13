@@ -113,6 +113,8 @@ Ngừng sử dụng ghi lý do tối đa 1000 ký tự trong AuditLog, chuyển 
 
 ### UC06 — Hồ sơ chuyên môn PT
 
+PT có thể gửi thêm `workStatus` khi lưu hồ sơ qua `PUT /api/trainers/me/profile`. Giá trị mặc định là `ACTIVE`. Chuyển sang `ON_LEAVE` giữ quyền đăng nhập và lịch đã tạo, đồng thời trả danh sách rỗng ở `GET /api/trainers/:id/available-slots`. Chuyển lại `ACTIVE` sẽ hiển thị các ca OPEN còn ở tương lai. Nếu bỏ qua trường này khi cập nhật, trạng thái làm việc hiện tại được giữ nguyên.
+
 Các endpoint dưới đây yêu cầu phiên đăng nhập. UC08 dùng `id` của hồ sơ trong danh sách làm định danh PT.
 
 | Phương thức | Đường dẫn | Dữ liệu |
@@ -125,3 +127,18 @@ Các endpoint dưới đây yêu cầu phiên đăng nhập. UC08 dùng `id` c�
 | DELETE | `/api/trainers/me/certifications/:certId` | Gửi `{ "version": n }` trong JSON body. |
 
 Ba thao tác ghi chỉ dành cho chính PT. Mỗi lần lưu thành công trả về toàn bộ hồ sơ với phiên bản mới. Khi gặp `409 VERSION_CONFLICT`, tải lại hồ sơ trước khi lưu tiếp. API trả `403 NOT_PROFILE_OWNER` cho người sửa sai quyền và `400` kèm `fieldErrors` khi dữ liệu không hợp lệ.
+
+### UC07 — Lịch làm việc PT
+
+Lịch sử dụng ngày và giờ của phòng tập (Asia/Ho_Chi_Minh). Mỗi `WorkingSlot` có một `id` riêng để UC08 tham chiếu. `workDate` có dạng YYYY-MM-DD, còn `startTime` và `endTime` trong kết quả là thời điểm ISO 8601.
+
+| Phương thức | Đường dẫn | Dữ liệu và quyền |
+| --- | --- | --- |
+| POST | `/api/trainers/me/availability` | PT gửi `{ "date": "2030-05-15", "startTime": "08:00", "endTime": "12:00" }`. Trả `{ slots, discardedMinutes }` với 3 ca và 30 phút dư trong ví dụ này. Nếu bất kỳ ca nào trùng hoặc thiếu đệm, toàn bộ lần đăng ký bị từ chối. |
+| GET | `/api/trainers/me/slots?from=YYYY-MM-DD&to=YYYY-MM-DD` | PT xem lịch của mình. Hai ngày biên đều được tính. Mặc định là tuần hiện tại từ thứ Hai đến Chủ nhật. |
+| GET | `/api/trainers/:id/slots?from=YYYY-MM-DD&to=YYYY-MM-DD` | Admin hoặc PT sở hữu lịch xem tất cả trạng thái. Ca BOOKED có thể kèm tên và mã hội viên. |
+| PATCH | `/api/trainers/me/slots/:slotId/availability` | PT báo bận bằng `{ "status": "UNAVAILABLE", "reason": "Bận họp chuyên môn" }` hoặc mở lại bằng `{ "status": "OPEN" }`. Trả ca sau cập nhật. |
+| DELETE | `/api/trainers/me/slots/:slotId` | PT xóa ca của mình. Trả 204, áp dụng cùng điều kiện 24 giờ và bảo vệ ca BOOKED. |
+| GET | `/api/trainers/:id/available-slots?date=YYYY-MM-DD` | Mọi tài khoản đăng nhập được tra cứu. Trả mảng ca OPEN chưa bắt đầu của PT đang ACTIVE, theo thứ tự giờ bắt đầu. |
+
+Khung đăng ký 06:00–22:00, thời lượng ca 60 phút và đệm tối thiểu 15 phút. `400 RANGE_TOO_SHORT` khi dải giờ dưới 60 phút, `409 SLOT_OVERLAP` khi trùng giờ hoặc thiếu đệm. Báo bận, mở lại hoặc xóa ca còn dưới 24 giờ trả `400 NOTICE_TOO_LATE`. Ca BOOKED trả `409 SLOT_ALREADY_BOOKED` và phải xử lý lịch hẹn qua UC08. Đọc danh sách ca trống không giữ chỗ.

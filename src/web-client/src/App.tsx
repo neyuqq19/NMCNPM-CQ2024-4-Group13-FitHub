@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Brand, Notice, PageHeading } from "./components";
 import { AdminLogin } from "./pages/AdminLogin";
+import { TrainerSchedule } from "./pages/TrainerSchedule";
 import { TrainerDetail, TrainerList } from "./pages/Trainers";
 import { Dashboard } from "./pages/Dashboard";
 
@@ -167,7 +168,7 @@ function Shell({
                 <ReceiptText size={22} />
                 {!collapsed && <span>Giao dịch</span>}
               </NavLink>
-              <NavLink to="/trainers" title="Huấn luyện viên">
+              <NavLink to="/trainers" end title="Huấn luyện viên">
                 <ContactRound size={22} />
                 {!collapsed && <span>Huấn luyện viên</span>}
               </NavLink>
@@ -178,12 +179,12 @@ function Shell({
                 <ContactRound size={22} />
                 {!collapsed && <span>Hồ sơ chuyên môn</span>}
               </NavLink>
-              <NavLink to="/trainers/schedule" title="Lịch làm việc PT">
-                <CalendarDays size={22} />
-                {!collapsed && <span>Lịch làm việc PT</span>}
-              </NavLink>
             </>
           )}
+          <NavLink to="/trainers/schedule" title="Lịch làm việc PT">
+            <CalendarDays size={22} />
+            {!collapsed && <span>Lịch làm việc PT</span>}
+          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <button
@@ -322,16 +323,6 @@ export function App() {
             <>
               <Route index element={<Navigate to="/trainers/me" replace />} />
               <Route path="trainers/me" element={<TrainerDetail owner />} />
-              <Route
-                path="trainers/schedule"
-                element={
-                  <PageHeading
-                    section="Huấn luyện viên"
-                    title="Lịch làm việc PT"
-                    description="Chức năng quản lý lịch làm việc chưa được triển khai."
-                  />
-                }
-              />
             </>
           ) : (
             <>
@@ -351,6 +342,10 @@ export function App() {
               <Route path="history" element={<HistoryPage />} />
             </>
           )}
+          <Route
+            path="trainers/schedule"
+            element={<TrainerSchedule owner={user?.role === "TRAINER"} />}
+          />
           <Route path="trainers" element={<TrainerList />} />
           <Route path="trainers/:id" element={<TrainerDetail />} />
           <Route path="*" element={<NotFound />} />

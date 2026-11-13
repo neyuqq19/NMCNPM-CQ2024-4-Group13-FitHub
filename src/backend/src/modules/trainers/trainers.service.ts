@@ -49,6 +49,7 @@ function summary(p: Summary): TrainerSummaryDto {
     email: p.user.email,
     phone: p.user.phone,
     accountStatus: p.user.status,
+    workStatus: p.workStatus,
     avatarUrl: p.avatarUrl,
     specialties: p.specialties,
     experienceYears: p.experienceYears,
@@ -227,6 +228,45 @@ export class TrainersService {
     );
   }
 
+  private async checkCertificationOwner(
+    tx: Prisma.TransactionClient,
+    id: string,
+    certId: string,
+  ) {
+    const cert = await tx.trainerCertification.findUnique({
+      where: { id: certId },
+      select: { trainerId: true },
+    });
+    if (!cert)
+      throw new NotFoundException({
+        code: "CERTIFICATION_NOT_FOUND",
+        message: "Không tìm thấy chứng chỉ.",
+      });
+    if (cert.trainerId !== id) notOwner();
+  }
+
+  updateCertification(
+    actorId: string,
+    id: string,
+    certId: string,
+    { version, issuedAt, ...fields }: CreateCertificationRequest,
+  ) {
+    return this.mutate(
+      actorId,
+      id,
+      version,
+      "UPDATE_TRAINER_CERTIFICATION",
+      {},
+      async (tx) => {
+        await this.checkCertificationOwner(tx, id, certId);
+        await tx.trainerCertification.update({
+          where: { id: certId, trainerId: id },
+          data: { ...fields, issuedAt: new Date(issuedAt) },
+        });
+      },
+    );
+  }
+
   removeCertification(
     actorId: string,
     id: string,
@@ -240,16 +280,7 @@ export class TrainersService {
       "DELETE_TRAINER_CERTIFICATION",
       {},
       async (tx) => {
-        const cert = await tx.trainerCertification.findUnique({
-          where: { id: certId },
-          select: { trainerId: true },
-        });
-        if (!cert)
-          throw new NotFoundException({
-            code: "CERTIFICATION_NOT_FOUND",
-            message: "Không tìm thấy chứng chỉ.",
-          });
-        if (cert.trainerId !== id) notOwner();
+        await this.checkCertificationOwner(tx, id, certId);
         await tx.trainerCertification.delete({
           where: { id: certId, trainerId: id },
         });
