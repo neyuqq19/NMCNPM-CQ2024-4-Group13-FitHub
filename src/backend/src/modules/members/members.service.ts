@@ -11,13 +11,14 @@ import type {
   UpdateMemberRequest,
 } from "@fithub/contracts";
 import { PrismaService } from "../../database/prisma.service";
+import { effectiveMembershipStatus } from "../check-ins/eligibility";
 import { invalid } from "./members.validation";
 
 const includeMember = {
   user: true,
   memberships: {
     orderBy: { startsOn: "desc" as const },
-    include: { payment: true },
+    include: { payment: true, freezePeriods: true },
   },
 };
 type Profile = Prisma.MemberProfileGetPayload<{
@@ -32,13 +33,7 @@ function summary(m: Profile["memberships"][number]) {
   }).format(new Date());
   const start = m.startsOn.toISOString().slice(0, 10),
     end = m.endsBefore.toISOString().slice(0, 10);
-  const status = ["ACTIVE", "SCHEDULED"].includes(m.status)
-    ? end <= today
-      ? "EXPIRED"
-      : start <= today
-        ? "ACTIVE"
-        : "SCHEDULED"
-    : m.status;
+  const status = effectiveMembershipStatus(m, today);
   return {
     id: m.id,
     code: m.code,
@@ -462,12 +457,16 @@ export class MembersService {
       );
     });
   }
+  now() {
+    return new Date();
+  }
   async getMyMembership(userId: string) {
     const profile = await this.prisma.memberProfile.findUnique({
       where: { userId },
       include: {
         memberships: {
           orderBy: { startsOn: "desc" },
+          include: { freezePeriods: true },
           take: 1,
         },
       },
@@ -482,6 +481,12 @@ export class MembersService {
     }
 
     const latest = profile.memberships[0] || null;
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(this.now());
     return {
       hasProfile: true,
       memberCode: profile.memberCode,
@@ -489,7 +494,7 @@ export class MembersService {
         ? {
             code: latest.code,
             packageName: latest.packageNameSnapshot,
-            status: latest.status,
+            status: effectiveMembershipStatus(latest, today),
             startsOn: latest.startsOn,
             endsBefore: latest.endsBefore,
             grantsGymAccess: latest.grantsGymAccessSnapshot,

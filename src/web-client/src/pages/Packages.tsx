@@ -4,7 +4,7 @@ import type {
   PackageDto,
   UpdatePackageRequest,
 } from "@fithub/contracts";
-import { Plus, Edit3, Power } from "lucide-react";
+import { Plus, Edit3, Power, X } from "lucide-react";
 import { Badge, Empty, FieldError, Notice, PageHeading } from "../components";
 import { ApiError, apiService } from "../services/api.service";
 
@@ -49,6 +49,7 @@ export function PackagesPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [filter, setFilter] = useState<FilterMode>("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [editing, setEditing] = useState<PackageDto | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -190,10 +191,16 @@ export function PackagesPage() {
     }
   }
 
+  const normalizedQuery = searchQuery.trim().toLowerCase();
   const filtered = packages.filter((p) => {
     const active = p.isActive !== false;
-    if (filter === "ACTIVE") return active;
-    if (filter === "INACTIVE") return !active;
+    if (filter === "ACTIVE" && !active) return false;
+    if (filter === "INACTIVE" && active) return false;
+    if (normalizedQuery) {
+      const matchCode = p.code.toLowerCase().includes(normalizedQuery);
+      const matchName = p.name.toLowerCase().includes(normalizedQuery);
+      if (!matchCode && !matchName) return false;
+    }
     return true;
   });
 
@@ -405,9 +412,41 @@ export function PackagesPage() {
 
       <section className="panel" aria-label="Danh sách gói tập">
         <div
-          className="actions"
-          style={{ justifyContent: "space-between", marginBottom: 16 }}
+          className="search-bar"
+          style={{
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 16,
+          }}
         >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flex: "1 1 280px",
+              maxWidth: 420,
+            }}
+          >
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm theo mã gói (GYM01...) hoặc tên gói tập..."
+              aria-label="Tìm kiếm gói tập theo mã hoặc tên"
+            />
+            {searchQuery.trim() && (
+              <button
+                type="button"
+                className="button outline"
+                onClick={() => setSearchQuery("")}
+                title="Xóa từ khóa tìm kiếm"
+              >
+                <X size={16} aria-hidden="true" /> Xóa tìm
+              </button>
+            )}
+          </div>
+
           <div className="actions" role="group" aria-label="Lọc trạng thái gói">
             <button
               type="button"
@@ -431,23 +470,41 @@ export function PackagesPage() {
               Ngừng kinh doanh (
               {packages.filter((p) => p.isActive === false).length})
             </button>
+            <button
+              type="button"
+              className="button outline"
+              disabled={loading || busy}
+              onClick={() => void loadPackages()}
+            >
+              Làm mới
+            </button>
           </div>
-          <button
-            type="button"
-            className="button outline"
-            disabled={loading || busy}
-            onClick={() => void loadPackages()}
-          >
-            Làm mới
-          </button>
         </div>
 
         {loading ? (
           <p role="status">Đang tải danh mục gói tập…</p>
         ) : !filtered.length ? (
           <Empty
-            title="Không có gói tập nào"
-            description="Nhấn 'Thêm gói tập mới' để khởi tạo gói tập cho phòng gym."
+            title="Không tìm thấy gói tập phù hợp"
+            description={
+              normalizedQuery || filter !== "ALL"
+                ? "Không có gói tập nào khớp với từ khóa hoặc bộ lọc trạng thái hiện tại."
+                : "Nhấn 'Thêm gói tập mới' để khởi tạo gói tập cho phòng gym."
+            }
+            action={
+              normalizedQuery || filter !== "ALL" ? (
+                <button
+                  type="button"
+                  className="button outline"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setFilter("ALL");
+                  }}
+                >
+                  Xóa bộ lọc tìm kiếm
+                </button>
+              ) : undefined
+            }
           />
         ) : (
           <div className="table-scroll">
@@ -506,23 +563,37 @@ export function PackagesPage() {
                         </Badge>
                       </td>
                       <td>
-                        <div className="actions">
+                        <div
+                          className="member-row-actions"
+                          style={{ justifyContent: "flex-start", gap: 8 }}
+                        >
                           <button
                             type="button"
-                            className="button outline"
+                            className="member-action"
                             disabled={busy}
                             onClick={() => openEdit(pkg)}
+                            title={`Sửa gói ${pkg.name}`}
+                            aria-label={`Sửa gói ${pkg.name}`}
                           >
-                            <Edit3 size={14} aria-hidden="true" /> Sửa
+                            <Edit3 size={17} aria-hidden="true" />
                           </button>
                           <button
                             type="button"
-                            className="button outline"
+                            className="member-action"
                             disabled={busy}
                             onClick={() => void toggleActive(pkg)}
+                            title={
+                              active
+                                ? `Ngừng bán gói ${pkg.name}`
+                                : `Mở bán lại gói ${pkg.name}`
+                            }
+                            aria-label={
+                              active
+                                ? `Ngừng bán gói ${pkg.name}`
+                                : `Mở bán lại gói ${pkg.name}`
+                            }
                           >
-                            <Power size={14} aria-hidden="true" />{" "}
-                            {active ? "Ngừng bán" : "Mở bán lại"}
+                            <Power size={17} aria-hidden="true" />
                           </button>
                         </div>
                       </td>
