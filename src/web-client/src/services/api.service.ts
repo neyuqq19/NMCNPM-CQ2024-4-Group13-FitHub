@@ -48,6 +48,7 @@ export async function fetchFromApi<T>(
       message: "Không kết nối được máy chủ. Kiểm tra kết nối rồi thử lại.",
     });
   }
+  if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && !path.endsWith("/login"))

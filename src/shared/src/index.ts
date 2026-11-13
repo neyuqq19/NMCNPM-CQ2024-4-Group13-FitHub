@@ -1,4 +1,5 @@
 export * from "./constants";
+export * from "./working-slots";
 
 export type Role = "ADMIN" | "TRAINER" | "MEMBER";
 export type Platform = "WEB" | "MOBILE";
@@ -354,4 +355,54 @@ export interface MyMembershipDetailDto {
     durationMonths: number;
     price: number;
   })[];
+export type TrainerWorkStatus = "ACTIVE" | "ON_LEAVE";
+
+export interface TrainerSummaryDto {
+  workStatus: TrainerWorkStatus;
+  id: string;
+  userId: string;
+  trainerCode: string;
+  displayName: string;
+  email: string | null;
+  phone: string | null;
+  accountStatus: AccountStatus;
+  avatarUrl: string | null;
+  specialties: string[];
+  experienceYears: number;
+  certificationCount: number;
+}
+
+export interface TrainerListResponse {
+  items: TrainerSummaryDto[];
+}
+
+export interface TrainerCertificationDto {
+  id: string;
+  name: string;
+  issuer: string;
+  issuedAt: string;
+  credentialUrl: string | null;
+}
+
+export interface TrainerProfileDto extends TrainerSummaryDto {
+  bio: string;
+  version: number;
+  certifications: TrainerCertificationDto[];
+}
+
+export interface UpdateTrainerProfileRequest {
+  workStatus?: TrainerWorkStatus;
+  bio: string;
+  specialties: string[];
+  experienceYears: number;
+  avatarUrl?: string | null;
+  version: number;
+}
+
+export interface CreateCertificationRequest {
+  name: string;
+  issuer: string;
+  issuedAt: string;
+  credentialUrl?: string | null;
+  version: number;
 }

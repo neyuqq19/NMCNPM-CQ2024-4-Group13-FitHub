@@ -1447,8 +1447,9 @@ button.member-action {
   .app-shell.is-collapsed {
     --sidebar-width: 300px;
   }
-  .app-shell .topbar {
+  .app-shell .topbar, .app-shell .main-content {
     margin-left: 0;
+    transition: none;
   }
   .app-shell .sidebar {
     top: var(--header);
@@ -1459,4 +1460,62 @@ button.member-action {
   .sidebar-footer {
     display: none;
   }
+}
+
+.trainer-tags, .trainer-specialty {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.trainer-tags .badge {
+  border-radius: 8px;
+  background: var(--input);
+  padding: 3px 8px;
+}
+.trainer-fields {
+  border: 0;
+  padding: 0;
+  margin: 0 0 14px;
+  min-width: 0;
+}
+.trainer-fields > .field, .trainer-fields legend, .trainer-specialty {
+  margin-bottom: 10px;
+}
+.trainer-avatar {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.trainer-bio {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.slot-controls, .slot-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin: 10px 0;
+}
+.slot-preview {
+  padding: 0;
+  list-style: none;
+}
+.slot-preview li {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #e0f4e8;
+  color: #185332;
+}
+.slot-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: min(420px, 90vw);
+}
+.slot-dialog::backdrop {
+  background: rgb(15 23 42 / 55%);
 }

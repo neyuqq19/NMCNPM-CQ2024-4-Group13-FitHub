@@ -7,9 +7,7 @@ const db = new PrismaClient({
   datasources: seedDatabaseUrl ? { db: { url: seedDatabaseUrl } } : undefined,
 });
 const password = process.env.SEED_PASSWORD;
-const connection = new URL(
-  seedDatabaseUrl || "postgresql://invalid/invalid",
-);
+const connection = new URL(seedDatabaseUrl || "postgresql://invalid/invalid");
 if (!password || password.length < 12)
   throw new Error(
     "Set SEED_PASSWORD (at least 12 characters) in apps/api/.env.",
@@ -45,6 +43,20 @@ const users: {
     email: "trainer@fithub.vn",
     phone: "0900000002",
     displayName: "Huấn luyện viên mẫu",
+    role: "TRAINER",
+    status: "ACTIVE",
+  },
+  {
+    email: "trainer2@fithub.vn",
+    phone: "0900000003",
+    displayName: "Trần Minh Khôi",
+    role: "TRAINER",
+    status: "ACTIVE",
+  },
+  {
+    email: "trainer3@fithub.vn",
+    phone: "0900000004",
+    displayName: "Lê Thảo My",
     role: "TRAINER",
     status: "ACTIVE",
   },
@@ -123,6 +135,80 @@ async function main() {
                   : null,
             },
           });
+      }
+      for (const sample of [
+        {
+          email: "trainer@fithub.vn",
+          trainerCode: "PT001",
+          bio: "Hướng dẫn tập sức mạnh và phục hồi vận động sau chấn thương.",
+          specialties: ["Tăng cơ - Giảm mỡ", "Phục hồi chấn thương"],
+          experienceYears: 5,
+        },
+        {
+          email: "trainer2@fithub.vn",
+          trainerCode: "PT002",
+          bio: "Huấn luyện sức mạnh và kỹ thuật tập với trọng lượng cơ thể.",
+          specialties: ["Strength & Conditioning", "Calisthenics"],
+          experienceYears: 3,
+        },
+        {
+          email: "trainer3@fithub.vn",
+          trainerCode: "PT003",
+          bio: "Hướng dẫn Pilates và các bài tập cải thiện thăng bằng.",
+          specialties: ["Pilates / Core"],
+          experienceYears: 4,
+        },
+      ]) {
+        const { email, ...profile } = sample;
+        const draft = await tx.trainerProfile.findFirst({
+          where: { user: { email, role: "TRAINER" }, version: 0, bio: "" },
+        });
+        if (!draft) continue;
+        await tx.trainerProfile.update({
+          where: { id: draft.id, version: 0, bio: "" },
+          data: {
+            ...profile,
+            certifications:
+              profile.trainerCode === "PT001"
+                ? {
+                    create: [
+                      {
+                        name: "Certified Personal Trainer",
+                        issuer: "ACE",
+                        issuedAt: new Date("2022-05-10"),
+                      },
+                      {
+                        name: "Corrective Exercise Specialist",
+                        issuer: "NASM",
+                        issuedAt: new Date("2023-08-18"),
+                      },
+                    ],
+                  }
+                : undefined,
+          },
+        });
+      }
+      const trainer = await tx.trainerProfile.findUniqueOrThrow({
+        where: { trainerCode: "PT001" },
+      });
+      const todayVN = new Date(Date.now() + 7 * 3600_000)
+        .toISOString()
+        .slice(0, 10);
+      for (const offset of [1, 3]) {
+        const workDate = new Date(todayVN);
+        workDate.setUTCDate(workDate.getUTCDate() + offset);
+        const date = workDate.toISOString().slice(0, 10);
+        const slots = ["08:00", "09:15", "10:30"].map((time) => {
+          const startTime = new Date(`${date}T${time}:00+07:00`);
+          return {
+            trainerId: trainer.id,
+            workDate,
+            startTime,
+            endTime: new Date(startTime.getTime() + 3600_000),
+          };
+        });
+        // Preserve existing sessions, including ones registered at a different start time.
+        await tx.workingSlot.createMany({ data: slots, skipDuplicates: true });
       }
       for (const item of [
         {
