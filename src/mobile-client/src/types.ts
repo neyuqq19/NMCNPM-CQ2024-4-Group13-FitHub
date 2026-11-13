@@ -67,5 +67,5 @@ export type ScreenId =
   | "07_QR_EXPIRED"
   | "08_VERIFYING"
   | "09_PROFILE"
-  | "10_WORKOUT_LOG";
+  | "10_WORKOUT_LOG"
   | "10_TRAINERS";
