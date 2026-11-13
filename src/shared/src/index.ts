@@ -569,6 +569,8 @@ export interface ResolveMaintenanceRequest {
 
 export interface RetireEquipmentRequest {
   reason?: string | null;
+}
+
 export type TrainerWorkStatus = "ACTIVE" | "ON_LEAVE";
 
 export interface TrainerSummaryDto {

@@ -362,6 +362,8 @@ model PersonalRecord {
   updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
 
   @@unique([memberId, exerciseKey])
+}
+
 enum FreezeStatus {
   ACTIVE
   ENDED
@@ -383,6 +385,8 @@ model FreezePeriod {
   updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([membershipId, status])
+}
+
 enum TrainerWorkStatus {
   ACTIVE
   ON_LEAVE
