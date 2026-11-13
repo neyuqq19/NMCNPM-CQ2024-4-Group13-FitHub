@@ -283,3 +283,62 @@ export const freezeMyMembership = (
     },
     session.accessToken,
   );
+
+// ===== UC16 — Thông báo =====
+export const getMyNotifications = (
+  baseUrl: string,
+  session: MobileSession,
+  query: { type?: "PT_REMINDER" | "PACKAGE_EXPIRY"; unreadOnly?: boolean; pageSize?: number } = {},
+) => {
+  const params = new URLSearchParams();
+  if (query.type) params.set("type", query.type);
+  if (query.unreadOnly) params.set("unreadOnly", "true");
+  if (query.pageSize) params.set("pageSize", String(query.pageSize));
+  const qs = params.toString();
+  return mobileRequest<import("@fithub/contracts").NotificationListResponse>(
+    baseUrl,
+    `/api/notifications/my${qs ? `?${qs}` : ""}`,
+    {},
+    session.accessToken,
+  );
+};
+export const markNotificationRead = (
+  baseUrl: string,
+  session: MobileSession,
+  id: string,
+) =>
+  mobileRequest<import("@fithub/contracts").NotificationReadResponse>(
+    baseUrl,
+    `/api/notifications/${id}/read`,
+    { method: "PATCH" },
+    session.accessToken,
+  );
+export const markAllNotificationsRead = (
+  baseUrl: string,
+  session: MobileSession,
+) =>
+  mobileRequest<import("@fithub/contracts").MarkAllReadResponse>(
+    baseUrl,
+    "/api/notifications/read-all",
+    { method: "POST" },
+    session.accessToken,
+  );
+// NTF-05: remember this phone so reminders can also be pushed to it.
+export const registerPushDevice = async (
+  baseUrl: string,
+  session: MobileSession,
+  pushToken: string,
+) =>
+  mobileRequest<import("@fithub/contracts").PushDeviceDto>(
+    baseUrl,
+    "/api/notifications/devices",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        deviceId: await deviceId(),
+        platform: "MOBILE",
+        pushToken,
+      } satisfies import("@fithub/contracts").RegisterPushDeviceRequest),
+    },
+    session.accessToken,
+  );

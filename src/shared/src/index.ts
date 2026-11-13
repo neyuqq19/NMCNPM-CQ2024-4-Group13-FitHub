@@ -622,3 +622,67 @@ export interface CreateCertificationRequest {
   credentialUrl?: string | null;
   version: number;
 }
+
+// ===== UC16 - Thông báo nhắc lịch / nhắc hạn gói tập =====
+export type NotificationType = "PT_REMINDER" | "PACKAGE_EXPIRY";
+export type ReminderType =
+  | "PT_REMINDER_24H"
+  | "PT_REMINDER_2H"
+  | "PACKAGE_EXPIRY_7D"
+  | "PACKAGE_EXPIRY_3D";
+// Màn hình mở khi bấm vào thông báo (điều hướng ngữ cảnh).
+export type NotificationTargetScreen = "PT_APPOINTMENTS" | "MY_PACKAGE";
+export interface NotificationDto {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  targetScreen: NotificationTargetScreen;
+  sourceId: string | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+export interface NotificationListResponse {
+  items: NotificationDto[];
+  // Số thông báo chưa đọc của người dùng, không phụ thuộc bộ lọc đang chọn.
+  unreadCount: number;
+  total: number;
+  page: number;
+  pageSize: number;
+}
+export interface NotificationReadResponse {
+  notification: NotificationDto;
+  unreadCount: number;
+}
+export interface MarkAllReadResponse {
+  updated: number;
+  unreadCount: number;
+}
+export interface RegisterPushDeviceRequest {
+  deviceId: string;
+  platform: Platform;
+  pushToken: string;
+  enabled?: boolean;
+}
+export interface PushDeviceDto {
+  id: string;
+  deviceId: string;
+  platform: Platform;
+  enabled: boolean;
+}
+export interface DispatchDueRequest {
+  // Chỉ dùng để chạy thử: coi như "bây giờ" là thời điểm này.
+  now?: string;
+  // Chỉ dùng để chạy thử: ép PushAdapter báo lỗi (E1).
+  simulatePushFailure?: boolean;
+}
+export interface DispatchDueResult {
+  due: number;
+  sent: number;
+  cancelled: number;
+  skipped: number;
+  deferred: number;
+  pushSent: number;
+  pushFailed: number;
+}

@@ -68,4 +68,5 @@ export type ScreenId =
   | "08_VERIFYING"
   | "09_PROFILE"
   | "10_WORKOUT_LOG"
-  | "10_TRAINERS";
+  | "10_TRAINERS"
+  | "11_NOTIFICATIONS";

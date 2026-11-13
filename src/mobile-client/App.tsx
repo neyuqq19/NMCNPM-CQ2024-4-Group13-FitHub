@@ -37,6 +37,7 @@ import { HomePanel } from "./src/HomePanel";
 import { PtBookingPanel } from "./src/PtBookingPanel";
 import { CheckInPanel } from "./src/CheckInPanel";
 import { AuthPanel } from "./src/AuthPanel";
+import { NotificationInboxPanel } from "./src/NotificationInboxPanel";
 import { WorkoutLogPanel } from "./src/WorkoutLogPanel";
 import { SPORTS_IMAGES } from "./src/sportsImages";
 import { C } from "./src/theme";
@@ -1082,6 +1083,18 @@ export default function App() {
         {/* =====================================================================
           09 · HỒ SƠ HỘI VIÊN (USER PROFILE)
          ===================================================================== */}
+        {/* 11 · HỘP THƯ THÔNG BÁO (UC16) */}
+        {screen === "11_NOTIFICATIONS" && session && (
+          <View style={styles.darkScreenRoot}>
+            <NotificationInboxPanel
+              baseUrl={apiBaseUrl}
+              session={session}
+              onBack={() => setScreen("01_HOME")}
+              onNavigate={setScreen}
+            />
+          </View>
+        )}
+
         {screen === "09_PROFILE" && (
           <View style={styles.darkScreenRoot}>
             <ScrollView

@@ -459,6 +459,72 @@ async function main() {
         }
       }
       await seedWorkouts(tx);
+
+      // UC16: 4 sample inbox notifications (2 unread, 2 read) so the bell shows a badge at once.
+      const day = 24 * 3600_000;
+      const notifications = [
+        {
+          id: "00000000-0000-4000-8000-000000001601",
+          member: "minhanh@example.com",
+          type: "PT_REMINDER" as const,
+          title: "Nhắc lịch tập PT ngày mai",
+          body: "Bạn có buổi tập với PT lúc 08:00 13/11/2026. Còn khoảng 24 giờ nữa.",
+          targetScreen: "PT_APPOINTMENTS",
+          isRead: false,
+          ago: 3 * 3600_000,
+        },
+        {
+          id: "00000000-0000-4000-8000-000000001602",
+          member: "minhanh@example.com",
+          type: "PT_REMINDER" as const,
+          title: "Sắp đến giờ tập với PT",
+          body: "Buổi tập với PT bắt đầu lúc 08:00 12/11/2026, còn khoảng 2 giờ nữa.",
+          targetScreen: "PT_APPOINTMENTS",
+          isRead: true,
+          ago: day,
+        },
+        {
+          id: "00000000-0000-4000-8000-000000001603",
+          member: "hoangnam@example.com",
+          type: "PACKAGE_EXPIRY" as const,
+          title: "Gói tập sắp hết hạn (7 ngày)",
+          body: "Gói 3 tháng của bạn còn dùng đến hết ngày 31/01/2027. Hãy gia hạn để không bị gián đoạn.",
+          targetScreen: "MY_PACKAGE",
+          isRead: false,
+          ago: 2 * 3600_000,
+        },
+        {
+          id: "00000000-0000-4000-8000-000000001604",
+          member: "hoangnam@example.com",
+          type: "PACKAGE_EXPIRY" as const,
+          title: "Gói tập sắp hết hạn (3 ngày)",
+          body: "Gói 3 tháng của bạn còn dùng đến hết ngày 31/01/2027. Hãy gia hạn để không bị gián đoạn.",
+          targetScreen: "MY_PACKAGE",
+          isRead: true,
+          ago: 2 * day,
+        },
+      ];
+      for (const sample of notifications) {
+        if (await tx.notification.findUnique({ where: { id: sample.id } }))
+          continue;
+        const recipient = await tx.user.findUniqueOrThrow({
+          where: { email: sample.member },
+        });
+        const createdAt = new Date(Date.now() - sample.ago);
+        await tx.notification.create({
+          data: {
+            id: sample.id,
+            recipientId: recipient.id,
+            type: sample.type,
+            title: sample.title,
+            body: sample.body,
+            targetScreen: sample.targetScreen,
+            isRead: sample.isRead,
+            readAt: sample.isRead ? createdAt : null,
+            createdAt,
+          },
+        });
+      }
     },
     { timeout: 15000 },
   );

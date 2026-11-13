@@ -82,6 +82,9 @@ model User {
   reportedIncidents   EquipmentIncident[] @relation("IncidentReporter")
   resolvedIncidents   EquipmentIncident[] @relation("IncidentResolver")
   equipmentHistory    EquipmentHistory[]  @relation("EquipmentActor")
+  reminders           Reminder[]
+  notifications       Notification[]
+  pushDevices         PushDevice[]
 }
 
 model Session {
@@ -522,4 +525,102 @@ model EquipmentHistory {
   createdAt   DateTime         @default(now()) @db.Timestamptz(3)
 
   @@index([equipmentId, createdAt])
+}
+
+// ===== UC16 - Nhac lich / nhac han goi tap (SAD 4.11) =====
+enum ReminderSource {
+  APPOINTMENT
+  MEMBERSHIP
+}
+
+enum ReminderType {
+  PT_REMINDER_24H
+  PT_REMINDER_2H
+  PACKAGE_EXPIRY_7D
+  PACKAGE_EXPIRY_3D
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  CANCELLED
+  SKIPPED
+}
+
+enum NotificationType {
+  PT_REMINDER
+  PACKAGE_EXPIRY
+}
+
+enum DeliveryStatus {
+  SENT
+  FAILED
+}
+
+// A scheduled reminder. The unique key stops the same reminder being created or sent twice.
+model Reminder {
+  id           String         @id @default(uuid()) @db.Uuid
+  recipientId  String         @db.Uuid
+  recipient    User           @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  sourceType   ReminderSource
+  // Appointment id or membership id, depending on sourceType.
+  sourceId     String         @db.Uuid
+  reminderType ReminderType
+  scheduledAt  DateTime       @db.Timestamptz(3)
+  status       ReminderStatus @default(PENDING)
+  sentAt       DateTime?      @db.Timestamptz(3)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
+  notification Notification?
+
+  @@unique([sourceType, sourceId, reminderType, recipientId])
+  @@index([status, scheduledAt])
+  @@index([sourceType, sourceId])
+}
+
+// In-app inbox row. Stored independently of whether the push was delivered (BR04).
+model Notification {
+  id               String            @id @default(uuid()) @db.Uuid
+  recipientId      String            @db.Uuid
+  recipient        User              @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  reminderId       String?           @unique @db.Uuid
+  reminder         Reminder?         @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+  type             NotificationType
+  title            String
+  body             String
+  targetScreen     String
+  sourceId         String?           @db.Uuid
+  isRead           Boolean           @default(false)
+  readAt           DateTime?         @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  deliveryAttempts DeliveryAttempt[]
+
+  @@index([recipientId, createdAt])
+  @@index([recipientId, isRead])
+}
+
+model DeliveryAttempt {
+  id             String         @id @default(uuid()) @db.Uuid
+  notificationId String         @db.Uuid
+  notification   Notification   @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel        String
+  status         DeliveryStatus
+  errorMessage   String?
+  attemptedAt    DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([notificationId])
+}
+
+model PushDevice {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId  String
+  platform  Platform
+  pushToken String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, deviceId])
 }

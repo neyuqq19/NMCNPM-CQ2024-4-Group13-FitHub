@@ -36,6 +36,8 @@ for (const args of [
     "test/trainers.test.ts",
     "test/working-slots.test.ts",
     "src/trainers/__tests__/trainers.service.spec.ts",
+    "test/notifications-rules.test.ts",
+    "test/notifications.test.ts",
   ],
 ]) {
   const result = spawnSync(process.execPath, args, {
