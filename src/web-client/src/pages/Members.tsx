@@ -484,10 +484,15 @@ export function MemberDetail() {
       });
       setFreezeTarget(null);
       setFreezeReason("");
+      const inclusiveEnd = date(
+        new Date(
+          new Date(res.membership.endsBefore).getTime() - 86400000,
+        ).toISOString(),
+      );
       setFreezeNotice(
         res.shiftedScheduledMembership
-          ? `Đã bảo lưu gói "${res.membership.packageName}" thêm ${freezeDays} ngày. Gói nối tiếp "${res.shiftedScheduledMembership.packageName}" cũng được dời ngày bắt đầu sang ${date(res.shiftedScheduledMembership.startsOn)}.`
-          : `Đã bảo lưu gói "${res.membership.packageName}" thêm ${freezeDays} ngày.`,
+          ? `Đã ghi nhận bảo lưu gói "${res.membership.packageName}" (${res.membership.code}) thêm ${freezeDays} ngày (hạn mới đến ${inclusiveEnd}, đã dùng ${res.membership.frozenDaysUsed}/30 ngày). Gói nối tiếp "${res.shiftedScheduledMembership.packageName}" (${res.shiftedScheduledMembership.code}) được dời ngày bắt đầu sang ${date(res.shiftedScheduledMembership.startsOn)}.`
+          : `Đã ghi nhận bảo lưu gói "${res.membership.packageName}" (${res.membership.code}) thêm ${freezeDays} ngày (hạn mới đến ${inclusiveEnd}, đã dùng ${res.membership.frozenDaysUsed}/30 ngày).`,
       );
       retry();
     } catch (err) {
@@ -507,8 +512,15 @@ export function MemberDetail() {
     setFreezeNotice("");
     try {
       const res = await apiService.unfreezeMembership(target.id);
+      const inclusiveEnd = date(
+        new Date(
+          new Date(res.membership.endsBefore).getTime() - 86400000,
+        ).toISOString(),
+      );
       setFreezeNotice(
-        `Đã kích hoạt lại gói "${res.membership.packageName}".`,
+        res.shiftedScheduledMembership
+          ? `Đã kết thúc bảo lưu sớm và kích hoạt lại gói "${res.membership.packageName}" (${res.membership.code}). Hạn gói cập nhật đến ${inclusiveEnd} (tổng ngày bảo lưu thực tế: ${res.membership.frozenDaysUsed}/30 ngày); gói nối tiếp "${res.shiftedScheduledMembership.packageName}" điều chỉnh ngày bắt đầu về ${date(res.shiftedScheduledMembership.startsOn)}.`
+          : `Đã kết thúc bảo lưu sớm và kích hoạt lại gói "${res.membership.packageName}" (${res.membership.code}). Hạn gói cập nhật đến ${inclusiveEnd} (tổng ngày bảo lưu thực tế: ${res.membership.frozenDaysUsed}/30 ngày).`,
       );
       retry();
     } catch (err) {
@@ -646,6 +658,14 @@ export function MemberDetail() {
                 type="date"
                 required
                 disabled={busy}
+                min={new Date(Date.now() + 7 * 3600000)
+                  .toISOString()
+                  .slice(0, 10)}
+                max={
+                  new Date(new Date(freezeTarget.endsBefore).getTime() - 86400000)
+                    .toISOString()
+                    .slice(0, 10)
+                }
                 value={freezeStartsOn}
                 onChange={(e) => setFreezeStartsOn(e.target.value)}
               />
@@ -810,53 +830,87 @@ export function MemberDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {m.purchaseHistory.map((purchase) => (
-                    <tr key={purchase.id}>
-                      <td>
-                        <strong>{purchase.packageName}</strong>
-                        <div>{purchase.code}</div>
-                      </td>
-                      <td>{date(purchase.registeredAt)}</td>
-                      <td>
-                        {money(purchase.payment?.amount ?? purchase.price)}
-                      </td>
-                      <td>
-                        <div>
-                          {purchase.payment?.status === "CONFIRMED"
-                            ? "Đã thanh toán"
-                            : purchase.payment?.status === "CANCELLED" ||
-                                purchase.status === "CANCELLED"
-                              ? "Đã hủy"
-                              : "Chờ thanh toán"}
-                        </div>
-                        {purchase.payment && (
+                  {m.purchaseHistory.map((purchase) => {
+                    const paymentLabel =
+                      purchase.payment?.status === "CONFIRMED"
+                        ? "Đã thanh toán"
+                        : purchase.payment?.status === "CANCELLED" ||
+                            purchase.status === "CANCELLED"
+                          ? "Đã hủy"
+                          : "Chờ thanh toán";
+                    const paymentTone =
+                      purchase.payment?.status === "CONFIRMED"
+                        ? "success"
+                        : purchase.payment?.status === "CANCELLED" ||
+                            purchase.status === "CANCELLED"
+                          ? "danger"
+                          : "warning";
+                    const statusTone =
+                      purchase.status === "ACTIVE"
+                        ? "success"
+                        : purchase.status === "FROZEN" ||
+                            purchase.status === "SCHEDULED" ||
+                            purchase.status === "PENDING_PAYMENT"
+                          ? "warning"
+                          : purchase.status === "CANCELLED"
+                            ? "danger"
+                            : "neutral";
+                    return (
+                      <tr key={purchase.id}>
+                        <td>
+                          <span className="cell-primary">
+                            {purchase.packageName}
+                          </span>
+                          <div>{purchase.code}</div>
+                        </td>
+                        <td>
+                          <span className="cell-primary">
+                            {date(purchase.registeredAt)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="cell-primary">
+                            {money(purchase.payment?.amount ?? purchase.price)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="cell-primary">
+                            <Badge tone={paymentTone}>{paymentLabel}</Badge>
+                          </span>
+                          {purchase.payment && (
+                            <div>
+                              {purchase.payment.code} ·{" "}
+                              {purchase.payment.method === "CASH"
+                                ? "Tiền mặt"
+                                : purchase.payment.method}
+                            </div>
+                          )}
+                          {purchase.payment?.confirmedAt && (
+                            <div>
+                              Ngày thu: {date(purchase.payment.confirmedAt)}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <span className="cell-primary">
+                            {date(purchase.startsOn)} –{" "}
+                            {date(
+                              new Date(
+                                new Date(purchase.endsBefore).getTime() -
+                                  86400000,
+                              ).toISOString(),
+                            )}
+                          </span>
                           <div>
-                            {purchase.payment.code} ·{" "}
-                            {purchase.payment.method === "CASH"
-                              ? "Tiền mặt"
-                              : purchase.payment.method}
+                            <Badge tone={statusTone}>
+                              {membershipStatuses[purchase.status] ||
+                                purchase.status}
+                            </Badge>
                           </div>
-                        )}
-                        {purchase.payment?.confirmedAt && (
-                          <div>
-                            Ngày thu: {date(purchase.payment.confirmedAt)}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        {date(purchase.startsOn)} –{" "}
-                        {date(
-                          new Date(
-                            new Date(purchase.endsBefore).getTime() - 86400000,
-                          ).toISOString(),
-                        )}
-                        <div>
-                          {membershipStatuses[purchase.status] ||
-                            purchase.status}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

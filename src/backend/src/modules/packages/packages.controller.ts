@@ -150,4 +150,22 @@ export class PackagesController {
     this.packagesService.requireAdmin(user);
     return this.packagesService.updatePackage(user.id, id, body);
   }
+
+  @Patch(':id/status')
+  async updatePackageStatus(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(
+      new ValidationPipe({
+        expectedType: UpdatePackageDto,
+        whitelist: true,
+        transform: true,
+      }),
+    )
+    body: UpdatePackageDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const user = await this.authService.validateSession(authorization);
+    this.packagesService.requireAdmin(user);
+    return this.packagesService.updatePackage(user.id, id, body);
+  }
 }
