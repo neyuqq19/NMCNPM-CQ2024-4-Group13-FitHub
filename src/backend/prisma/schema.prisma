@@ -73,6 +73,7 @@ model User {
   sessions            Session[]
   authEvents          AuthEvent[]
   emailVerification   EmailVerification?
+  trainerProfile      TrainerProfile?
   memberProfile       MemberProfile?
   confirmedPayments   Payment[]          @relation("PaymentConfirmer")
   auditLogs           AuditLog[]
@@ -273,4 +274,32 @@ model CheckInRecord {
   checkedInAt   DateTime           @db.Timestamptz(3)
 
   @@index([memberId, checkedInAt])
+}
+
+model TrainerProfile {
+  id              String                 @id @default(uuid()) @db.Uuid
+  userId          String                 @unique @db.Uuid
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainerCode     String                 @unique
+  bio             String                 @default("")
+  specialties     String[]               @default([])
+  experienceYears Int                    @default(0)
+  avatarUrl       String?
+  version         Int                    @default(0)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime               @updatedAt @db.Timestamptz(3)
+  certifications  TrainerCertification[]
+}
+
+model TrainerCertification {
+  id            String         @id @default(uuid()) @db.Uuid
+  trainerId     String         @db.Uuid
+  trainer       TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  name          String
+  issuer        String
+  issuedAt      DateTime       @db.Date
+  credentialUrl String?
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([trainerId])
 }
