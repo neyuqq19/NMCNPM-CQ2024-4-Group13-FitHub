@@ -10,17 +10,20 @@ import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type {
   CurrentUser,
-  PaymentDetailDto,
+  PaymentStatus,
   RegisterMembershipRequest,
   ConfirmPaymentRequest,
 } from "@fithub/contracts";
 import { PrismaService } from "../../database/prisma.service";
 import { gymClock } from "../check-ins/eligibility";
-const includePayment = {
-  membership: { include: { member: { include: { user: true } } } },
-  confirmedBy: true,
-} satisfies Prisma.PaymentInclude;
-type PaymentRow = Prisma.PaymentGetPayload<{ include: typeof includePayment }>;
+import { InvoiceAdapter } from "../payments/invoice.adapter";
+import {
+  evaluateGrant,
+  findOverlapBlock,
+  grantPaidOrder,
+} from "../payments/grant-paid-order";
+import { includePayment, toPaymentDto } from "../payments/payment.mapper";
+const dto = toPaymentDto;
 function conflict(code: string, message: string): never {
   throw new ConflictException({ code, message });
 }
@@ -29,37 +32,6 @@ function missing(): never {
     code: "PAYMENT_NOT_FOUND",
     message: "Không tìm thấy giao dịch.",
   });
-}
-function dto(p: PaymentRow): PaymentDetailDto {
-  const m = p.membership,
-    u = m.member.user;
-  return {
-    id: p.id,
-    code: p.code,
-    status: p.status,
-    amount: Number(p.amount),
-    method: p.method,
-    createdAt: p.createdAt.toISOString(),
-    confirmedAt: p.confirmedAt?.toISOString() || null,
-    confirmedBy: p.confirmedBy?.displayName || null,
-    isTest: p.code.startsWith("GD-TESTQR-") || m.code.startsWith("TESTQR-"),
-    member: {
-      id: m.memberId,
-      memberCode: m.member.memberCode,
-      displayName: u.displayName,
-      accountStatus: u.status,
-    },
-    membership: {
-      id: m.id,
-      code: m.code,
-      packageName: m.packageNameSnapshot,
-      status: m.status,
-      startsOn: m.startsOn.toISOString().slice(0, 10),
-      endsBefore: m.endsBefore.toISOString().slice(0, 10),
-      accessWindow: m.accessWindowSnapshot,
-      grantsGymAccess: m.grantsGymAccessSnapshot,
-    },
-  };
 }
 export function addMonths(start: string, months: number) {
   const d = new Date(`${start}T00:00:00Z`),
@@ -70,7 +42,10 @@ export function addMonths(start: string, months: number) {
 }
 @Injectable()
 export class SalesService {
-  constructor(@Inject(PrismaService) private db: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private db: PrismaService,
+    @Inject(InvoiceAdapter) private invoices: InvoiceAdapter,
+  ) {}
   private requireAdmin(user: CurrentUser) {
     if (user.role !== "ADMIN")
       throw new ForbiddenException({
@@ -138,7 +113,10 @@ export class SalesService {
           orderBy: { endsBefore: "desc" },
         }),
         tx.payment.findMany({
-          where: { status: "PENDING", membership: { memberId: id } },
+          where: {
+            status: { in: ["PENDING", "FAILED"] },
+            membership: { memberId: id },
+          },
           orderBy: { createdAt: "desc" },
           select: { id: true, code: true },
         }),
@@ -178,29 +156,8 @@ export class SalesService {
     end: Date,
     except?: string,
   ) {
-    const frozen = await tx.membership.findFirst({
-      where: { memberId, status: "FROZEN", grantsGymAccessSnapshot: true },
-    });
-    if (frozen)
-      conflict(
-        "MEMBERSHIP_FROZEN",
-        "Cần xử lý gói đang bảo lưu trước khi đăng ký hoặc gia hạn.",
-      );
-    const overlap = await tx.membership.findFirst({
-      where: {
-        memberId,
-        ...(except ? { id: { not: except } } : {}),
-        grantsGymAccessSnapshot: true,
-        status: { in: ["PENDING_PAYMENT", "ACTIVE", "SCHEDULED", "FROZEN"] },
-        startsOn: { lt: end },
-        endsBefore: { gt: start },
-      },
-    });
-    if (overlap)
-      conflict(
-        "MEMBERSHIP_OVERLAP",
-        "Thời hạn trùng với gói đã đăng ký hoặc đang chờ thanh toán. Chọn ngày bắt đầu sau kỳ hiện tại hoặc xử lý khoản chờ trước.",
-      );
+    const block = await findOverlapBlock(tx, memberId, start, end, except);
+    if (block) conflict(block.code, block.message);
   }
   async register(
     user: CurrentUser,
@@ -348,7 +305,14 @@ export class SalesService {
       !Number.isInteger(pageSize) ||
       pageSize < 1 ||
       pageSize > 100 ||
-      (q.status && !["PENDING", "CONFIRMED", "CANCELLED"].includes(q.status)) ||
+      (q.status &&
+        ![
+          "PENDING",
+          "CONFIRMED",
+          "CANCELLED",
+          "FAILED",
+          "NEEDS_REVIEW",
+        ].includes(q.status)) ||
       (q.member &&
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           q.member,
@@ -361,9 +325,12 @@ export class SalesService {
       });
     const term = (q.q || "").trim().slice(0, 100);
     const where: Prisma.PaymentWhereInput = {
-      ...(q.status
-        ? { status: q.status as "PENDING" | "CONFIRMED" | "CANCELLED" }
-        : {}),
+      // NEEDS_REVIEW: các khoản cần Admin đối soát (chưa cấp quyền lợi hoặc thu trùng).
+      ...(q.status === "NEEDS_REVIEW"
+        ? { reconciliationStatus: "MISMATCHED" }
+        : q.status
+          ? { status: q.status as PaymentStatus }
+          : {}),
       ...(q.member ? { membership: { memberId: q.member } } : {}),
       ...(term
         ? {
@@ -406,7 +373,7 @@ export class SalesService {
     id: string,
     body: ConfirmPaymentRequest | null,
   ) {
-    return this.db
+    const result = await this.db
       .$transaction(
         async (tx) => {
           await this.actor(tx, user);
@@ -443,10 +410,18 @@ export class SalesService {
                 "AMOUNT_MISMATCH",
                 "Số tiền không khớp với khoản thu cần xác nhận.",
               );
-            if (current.status === "CONFIRMED") return dto(current);
+            // BR04: cùng idempotencyKey → trả lại kết quả đã lưu; khác khóa hoặc đã hủy → đã xử lý.
+            if (current.status === "CONFIRMED") {
+              if (current.idempotencyKey === body.idempotencyKey)
+                return dto(current);
+              conflict(
+                "PAYMENT_ALREADY_PROCESSED",
+                "Giao dịch đã được xác nhận trước đó.",
+              );
+            }
             if (current.status === "CANCELLED")
               conflict(
-                "PAYMENT_CANCELLED",
+                "PAYMENT_ALREADY_PROCESSED",
                 "Giao dịch đã hủy. Vui lòng tạo đăng ký mới.",
               );
             this.eligible(p);
@@ -458,55 +433,38 @@ export class SalesService {
                 "REQUEST_CONFLICT",
                 "Mã xác nhận đã được dùng cho giao dịch khác.",
               );
+            // Tránh thu hai lần: hội viên đang trong phiên thanh toán VNPay còn hạn.
+            if (
+              current.method === "VNPAY" &&
+              current.status === "PENDING" &&
+              current.vnpExpiresAt &&
+              current.vnpExpiresAt > new Date()
+            )
+              conflict(
+                "ONLINE_PAYMENT_IN_PROGRESS",
+                "Hội viên đang thanh toán qua VNPay. Chờ kết quả hoặc hết hạn thanh toán rồi mới thu tại quầy.",
+              );
             const m = current.membership,
               day = gymClock(new Date()).day;
-            if (m.endsBefore.toISOString().slice(0, 10) <= day)
-              conflict(
-                "ORDER_EXPIRED",
-                "Thời hạn dự kiến của đăng ký đã kết thúc. Hủy và tạo đăng ký mới.",
-              );
-            if (m.grantsGymAccessSnapshot) {
-              if (m.startsOn.toISOString().slice(0, 10) > day) {
-                const existingScheduled = await tx.membership.findFirst({
-                  where: {
-                    id: { not: m.id },
-                    memberId: m.memberId,
-                    grantsGymAccessSnapshot: true,
-                    status: "SCHEDULED",
-                  },
-                });
-                if (existingScheduled) {
-                  conflict(
-                    "SCHEDULED_LIMIT_REACHED",
-                    "Hội viên đã có 1 gói gia hạn chờ kích hoạt (SCHEDULED).",
-                  );
-                }
-              }
-              await this.checkOverlap(
-                tx,
-                m.memberId,
-                m.startsOn,
-                m.endsBefore,
-                m.id,
-              );
-            }
-            await tx.membership.update({
-              where: { id: m.id },
-              data: {
-                status:
-                  m.startsOn.toISOString().slice(0, 10) > day
-                    ? "SCHEDULED"
-                    : "ACTIVE",
-                version: { increment: 1 },
-              },
-            });
+            const block = await evaluateGrant(tx, m, p.user, day);
+            if (block) conflict(block.code, block.message);
+            // BR01: kích hoạt gói và xác nhận khoản thu trong cùng một transaction.
+            await grantPaidOrder(tx, m, day);
+            const method = body.method ?? "CASH";
             await tx.payment.update({
               where: { id },
               data: {
                 status: "CONFIRMED",
+                method,
                 confirmedById: user.id,
                 confirmedAt: new Date(),
                 idempotencyKey: body.idempotencyKey,
+                transferReference:
+                  method === "BANK_TRANSFER"
+                    ? body.reference?.trim() || null
+                    : null,
+                vnpExpiresAt: null,
+                benefitStatus: "GRANTED",
               },
             });
           }
@@ -518,7 +476,7 @@ export class SalesService {
               entityId: id,
               changedFields: [
                 "status",
-                ...(body ? ["confirmedAt", "confirmedById"] : []),
+                ...(body ? ["method", "confirmedAt", "confirmedById"] : []),
               ],
             },
           });
@@ -542,6 +500,18 @@ export class SalesService {
           );
         throw error;
       });
+    // BR03/E2: hóa đơn nằm sau transaction thu tiền và không ném lỗi; hóa đơn lỗi
+    // chỉ đánh dấu FAILED. Gọi cả khi trả lại kết quả cũ để hóa đơn sót vẫn được phát hành.
+    if (body && result.status === "CONFIRMED") {
+      await this.invoices.issueForPayment(id);
+      return dto(
+        await this.db.payment.findUniqueOrThrow({
+          where: { id },
+          include: includePayment,
+        }),
+      );
+    }
+    return result;
   }
   async dashboard(user: CurrentUser, query: Record<string, string> = {}) {
     this.requireAdmin(user);
