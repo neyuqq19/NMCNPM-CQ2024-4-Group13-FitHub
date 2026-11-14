@@ -66,7 +66,10 @@ export interface MemberDto {
 }
 
 export type AccountStatus =
-  "PENDING_VERIFY" | "ACTIVE" | "LOCKED" | "DEACTIVATED";
+  | "PENDING_VERIFY"
+  | "ACTIVE"
+  | "LOCKED"
+  | "DEACTIVATED";
 export interface MemberProfileInput {
   displayName: string;
   dateOfBirth?: string | null;
@@ -105,7 +108,7 @@ export interface PackagePurchaseDto extends MembershipSummary {
     code: string;
     amount: number;
     method: string;
-    status: "PENDING" | "CONFIRMED" | "CANCELLED";
+    status: PaymentStatus;
     confirmedAt: string | null;
   } | null;
 }
@@ -221,16 +224,58 @@ export interface RegisterMembershipRequest {
   startsOn: string;
   expectedPrice: number;
 }
+
+// ===== UC15 — Thanh toán gói tập (SAD 4.4, UCSpec 3.5.1) =====
+
+export type PaymentStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "FAILED";
+export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "VNPAY";
+/** Phương thức Admin được chọn khi thu tại quầy. */
+export type CounterPaymentMethod = "CASH" | "BANK_TRANSFER";
+/** NEEDS_REVIEW: đã thu tiền nhưng chưa cấp được quyền lợi; NONE: đã đối soát, quyết định không cấp. */
+export type BenefitStatus = "GRANTED" | "NEEDS_REVIEW" | "NONE";
+/** MISMATCHED: cần Admin đối soát; RECONCILED: đã xử lý. */
+export type ReconciliationStatus = "NONE" | "MISMATCHED" | "RECONCILED";
+export type InvoiceStatus = "ISSUED" | "FAILED";
+
+export interface InvoiceReceiptDto {
+  buyerName: string;
+  memberCode: string;
+  packageName: string;
+  period: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  cashier: string | null;
+  paymentCode: string;
+}
+export interface InvoiceDto {
+  id: string;
+  /** INV-YYYYMMDD-NNNN; null khi phát hành lỗi. */
+  code: string | null;
+  status: InvoiceStatus;
+  issuedAt: string | null;
+  errorMessage: string | null;
+  /** Chế độ SIMULATED: biên lai dựng từ dữ liệu giao dịch, không có file PDF. */
+  pdfUrl: string | null;
+  receipt: InvoiceReceiptDto | null;
+}
+
 export interface PaymentDetailDto {
   id: string;
   code: string;
-  status: "PENDING" | "CONFIRMED" | "CANCELLED";
+  status: PaymentStatus;
   amount: number;
   method: string;
   createdAt: string;
   confirmedAt: string | null;
   confirmedBy: string | null;
   isTest: boolean;
+  benefitStatus: BenefitStatus;
+  reconciliationStatus: ReconciliationStatus;
+  transferReference: string | null;
+  /** Hạn của URL VNPay đang mở; null khi chưa có hoặc đã chốt. */
+  onlineExpiresAt: string | null;
+  invoice: InvoiceDto | null;
   member: {
     id: string;
     memberCode: string;
@@ -257,7 +302,47 @@ export interface PaymentPageDto {
 export interface ConfirmPaymentRequest {
   idempotencyKey: string;
   amount: number;
+  /** Mặc định CASH. */
+  method?: CounterPaymentMethod;
+  /** Tham chiếu chuyển khoản tại quầy (tối đa 100 ký tự). */
+  reference?: string;
 }
+export interface CreateVNPayUrlResponse {
+  paymentId: string;
+  paymentCode: string;
+  paymentUrl: string;
+  txnRef: string;
+  amount: number;
+  expiresAt: string;
+  /** SIMULATED: chưa có tài khoản sandbox, dùng giả lập IPN đã ký để thử luồng. */
+  mode: "SANDBOX" | "SIMULATED";
+}
+export interface SimulateVNPayRequest {
+  result: "SUCCESS" | "FAILED" | "BAD_SIGNATURE";
+}
+export interface ReconcilePaymentRequest {
+  /** GRANT: cấp lại quyền lợi gói; DISMISS: đã xử lý ngoài hệ thống (ví dụ hoàn tiền). */
+  action: "GRANT" | "DISMISS";
+  note?: string;
+}
+/** Khoản thanh toán của chính hội viên (mobile). */
+export interface MyPaymentDto {
+  id: string;
+  code: string;
+  status: PaymentStatus;
+  amount: number;
+  method: string;
+  createdAt: string;
+  confirmedAt: string | null;
+  onlineExpiresAt: string | null;
+  packageName: string;
+  membershipStatus: string;
+  startsOn: string;
+  endsBefore: string;
+  benefitStatus: BenefitStatus;
+  invoice: InvoiceDto | null;
+}
+
 export interface DashboardDto {
   range: "7d" | "30d" | "month";
   newMembers: number;
@@ -685,4 +770,57 @@ export interface DispatchDueResult {
   deferred: number;
   pushSent: number;
   pushFailed: number;
+}
+
+// ===== UC08 - Dat lich hen PT 1-1 =====
+export type AppointmentStatus =
+  | "CONFIRMED"
+  | "CANCELLED_BY_MEMBER"
+  | "CANCELLED_BY_PT"
+  | "NO_SHOW"
+  | "COMPLETED";
+
+export type PtSessionState = "HELD" | "CONSUMED" | "REFUNDED";
+
+export type PtSessionOutcome = "REFUND" | "CONSUME" | "REFUND_WITH_COMPENSATION";
+
+export interface AppointmentDto {
+  id: string;
+  code: string;
+  status: AppointmentStatus;
+  ptSessionState: PtSessionState;
+  slotId: string;
+  workDate: string;
+  startTime: string;
+  endTime: string;
+  trainer: { id: string; displayName: string; trainerCode: string };
+  member: { id: string; displayName: string; memberCode: string };
+  cancelReason: string | null;
+  cancelledAt: string | null;
+  compensationGranted: boolean;
+  createdAt: string;
+}
+
+export interface BookAppointmentRequest {
+  slotId: string;
+  // Chi ADMIN moi can truyen: dat ho hoi vien tai quay.
+  memberId?: string;
+}
+
+export interface CancelAppointmentRequest {
+  // Bat buoc khi PT huy; hoi vien co the bo trong.
+  reason?: string;
+}
+
+export interface AppointmentPageDto {
+  items: AppointmentDto[];
+  total: number;
+  // Chi co trong GET /api/appointments/my: so buoi PT khai dung con lai.
+  ptAvailable?: number;
+}
+
+export interface AppointmentActionResponse {
+  appointment: AppointmentDto;
+  ptSessionOutcome: PtSessionOutcome | null;
+  ptAvailable: number;
 }

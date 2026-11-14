@@ -26,6 +26,7 @@ import {
 import { Brand, Notice, PageHeading } from "./components";
 import { AdminLogin } from "./pages/AdminLogin";
 import { TrainerSchedule } from "./pages/TrainerSchedule";
+import { PtBookingsPage } from "./pages/PtBookings";
 import { TrainerDetail, TrainerList } from "./pages/Trainers";
 import { Dashboard } from "./pages/Dashboard";
 
@@ -202,6 +203,10 @@ function Shell({
             <CalendarDays size={22} />
             {!collapsed && <span>Lịch làm việc PT</span>}
           </NavLink>
+          <NavLink to="/pt-bookings" title="Lịch hẹn PT">
+            <CalendarDays size={22} />
+            {!collapsed && <span>Lịch hẹn PT</span>}
+          </NavLink>
         </nav>
         <div className="sidebar-footer">
           <button
@@ -365,6 +370,10 @@ export function App() {
           <Route
             path="trainers/schedule"
             element={<TrainerSchedule owner={user?.role === "TRAINER"} />}
+          />
+          <Route
+            path="pt-bookings"
+            element={<PtBookingsPage role={user!.role} />}
           />
           <Route path="trainers" element={<TrainerList />} />
           <Route path="trainers/:id" element={<TrainerDetail />} />
