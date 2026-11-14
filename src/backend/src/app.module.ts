@@ -11,6 +11,7 @@ import { WorkoutsModule } from './modules/workouts/workouts.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { EquipmentsModule } from './modules/equipments/equipments.module';
 import { TrainersModule } from './modules/trainers/trainers.module';
+import { PtBookingsModule } from './modules/pt-bookings/pt-bookings.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { TrainersModule } from './modules/trainers/trainers.module';
     MembershipsModule,
     EquipmentsModule,
     TrainersModule,
+    PtBookingsModule,
   ],
   controllers: [AppController],
 })

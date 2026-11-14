@@ -1,0 +1,11 @@
+.pt-filters { gap: 12px; flex-wrap: wrap; align-items: center; }
+.pt-filters label { display: inline-flex; align-items: center; gap: 6px; }
+.pt-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pt-note { color: var(--muted, #6b7280); }
+.pt-modal-backdrop {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.45); padding: 16px;
+}
+.pt-modal { width: min(520px, 100%); display: grid; gap: 12px; }
+.pt-modal textarea { width: 100%; }
+.pt-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }

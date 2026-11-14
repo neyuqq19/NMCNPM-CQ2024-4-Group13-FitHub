@@ -771,3 +771,56 @@ export interface DispatchDueResult {
   pushSent: number;
   pushFailed: number;
 }
+
+// ===== UC08 - Dat lich hen PT 1-1 =====
+export type AppointmentStatus =
+  | "CONFIRMED"
+  | "CANCELLED_BY_MEMBER"
+  | "CANCELLED_BY_PT"
+  | "NO_SHOW"
+  | "COMPLETED";
+
+export type PtSessionState = "HELD" | "CONSUMED" | "REFUNDED";
+
+export type PtSessionOutcome = "REFUND" | "CONSUME" | "REFUND_WITH_COMPENSATION";
+
+export interface AppointmentDto {
+  id: string;
+  code: string;
+  status: AppointmentStatus;
+  ptSessionState: PtSessionState;
+  slotId: string;
+  workDate: string;
+  startTime: string;
+  endTime: string;
+  trainer: { id: string; displayName: string; trainerCode: string };
+  member: { id: string; displayName: string; memberCode: string };
+  cancelReason: string | null;
+  cancelledAt: string | null;
+  compensationGranted: boolean;
+  createdAt: string;
+}
+
+export interface BookAppointmentRequest {
+  slotId: string;
+  // Chi ADMIN moi can truyen: dat ho hoi vien tai quay.
+  memberId?: string;
+}
+
+export interface CancelAppointmentRequest {
+  // Bat buoc khi PT huy; hoi vien co the bo trong.
+  reason?: string;
+}
+
+export interface AppointmentPageDto {
+  items: AppointmentDto[];
+  total: number;
+  // Chi co trong GET /api/appointments/my: so buoi PT khai dung con lai.
+  ptAvailable?: number;
+}
+
+export interface AppointmentActionResponse {
+  appointment: AppointmentDto;
+  ptSessionOutcome: PtSessionOutcome | null;
+  ptAvailable: number;
+}
