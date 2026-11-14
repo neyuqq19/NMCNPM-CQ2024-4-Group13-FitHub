@@ -39,6 +39,7 @@ enum PaymentStatus {
   PENDING
   CONFIRMED
   CANCELLED
+  FAILED
 }
 
 enum PaymentMethod {
@@ -214,6 +215,10 @@ model Payment {
 
   @@index([status, confirmedAt])
   @@index([createdAt, id])
+
+  transferReference String?
+  vnpAttempts       Int       @default(0)
+  vnpExpiresAt      DateTime? @db.Timestamptz(3)
 }
 
 model AuditLog {
