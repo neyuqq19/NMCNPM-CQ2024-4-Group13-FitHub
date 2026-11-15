@@ -12,6 +12,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type {
+  AppointmentActionResponse,
+  AppointmentDto,
+  AppointmentPageDto,
   TrainerListResponse,
   TrainerProfileDto,
   TrainerSummaryDto,
@@ -94,13 +97,44 @@ const hourInVietnam = new Intl.DateTimeFormat("vi-VN", {
   hourCycle: "h23",
 });
 
-function AvailableSlots({ id, ...connection }: Connection & { id: string }) {
+function errorText(cause: unknown, fallback: string) {
+  return cause instanceof Error ? cause.message : fallback;
+}
+
+function AvailableSlots({
+  id,
+  onBooked,
+  ...connection
+}: Connection & { id: string; onBooked: () => void }) {
   const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
+  const [busy, setBusy] = useState<string>();
+  const [note, setNote] = useState("");
   const { data, error, retry } = useTrainerRequest<WorkingSlotDto[]>(
     connection,
     `/api/trainers/${encodeURIComponent(id)}/available-slots?date=${date}`,
   );
+  async function book(slot: WorkingSlotDto) {
+    setBusy(slot.id);
+    setNote("");
+    try {
+      const res = await mobileRequest<AppointmentActionResponse>(
+        connection.baseUrl,
+        "/api/appointments",
+        { method: "POST", body: JSON.stringify({ slotId: slot.id }) },
+        connection.token,
+      );
+      setNote(
+        `Đặt lịch thành công (${res.appointment.code}). Bạn còn ${res.ptAvailable} buổi PT.`,
+      );
+      onBooked();
+    } catch (cause) {
+      setNote(errorText(cause, "Không đặt được lịch."));
+    } finally {
+      setBusy(undefined);
+      retry(); // ca vừa đặt hoặc vừa bị người khác đặt không còn là ca trống
+    }
+  }
   function changeDay(days: number) {
     setDate((current) => {
       const day = new Date(current + "T00:00:00Z");
@@ -123,16 +157,29 @@ function AvailableSlots({ id, ...connection }: Connection & { id: string }) {
       {data ? (
         data.length ? (
           data.map((slot) => (
-            <Text style={s.text} key={slot.id}>
-              {hourInVietnam.format(new Date(slot.startTime))} –{" "}
-              {hourInVietnam.format(new Date(slot.endTime))}
-            </Text>
+            <View style={s.row} key={slot.id}>
+              <Text style={[s.text, s.grow]}>
+                {hourInVietnam.format(new Date(slot.startTime))} –{" "}
+                {hourInVietnam.format(new Date(slot.endTime))}
+              </Text>
+              <Action
+                label={busy === slot.id ? "Đang đặt…" : "Đặt lịch"}
+                onPress={() => {
+                  if (!busy) void book(slot);
+                }}
+              />
+            </View>
           ))
         ) : (
           <Text style={s.meta}>Chưa có ca trống trong ngày này.</Text>
         )
       ) : (
         <RequestStatus error={error} retry={retry} />
+      )}
+      {!!note && (
+        <Text accessibilityRole="alert" style={s.text}>
+          {note}
+        </Text>
       )}
     </View>
   );
@@ -141,8 +188,9 @@ function AvailableSlots({ id, ...connection }: Connection & { id: string }) {
 function TrainerDetail({
   id,
   onClose,
+  onBooked,
   ...connection
-}: Connection & { id: string; onClose: () => void }) {
+}: Connection & { id: string; onClose: () => void; onBooked: () => void }) {
   const { data, error, retry } = useTrainerRequest<TrainerProfileDto>(
     connection,
     `/api/trainers/${encodeURIComponent(id)}`,
@@ -162,7 +210,7 @@ function TrainerDetail({
                 <Text style={s.meta}>Giới thiệu bản thân</Text>
                 <Text style={s.text}>{data.bio}</Text>
               </View>
-              <AvailableSlots {...connection} id={id} />
+              <AvailableSlots {...connection} id={id} onBooked={onBooked} />
               <Text style={s.name}>Chứng chỉ hành nghề</Text>
               {!data.certifications.length && (
                 <Text style={s.meta}>Chưa có chứng chỉ.</Text>
@@ -191,6 +239,117 @@ function TrainerDetail({
   );
 }
 
+const MEMBER_FREE_CANCEL_HOURS = 12;
+const statusText: Record<AppointmentDto["status"], string> = {
+  CONFIRMED: "Đã xác nhận",
+  CANCELLED_BY_MEMBER: "Bạn đã hủy",
+  CANCELLED_BY_PT: "PT đã hủy",
+  NO_SHOW: "Vắng mặt",
+  COMPLETED: "Đã hoàn thành",
+};
+
+function MyAppointments({
+  version,
+  onChanged,
+  ...connection
+}: Connection & { version: number; onChanged: () => void }) {
+  const { data, error, retry } = useTrainerRequest<AppointmentPageDto>(
+    connection,
+    `/api/appointments/my?v=${version}`,
+  );
+  const [target, setTarget] = useState<AppointmentDto>();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const hoursLeft = target
+    ? (new Date(target.startTime).getTime() - Date.now()) / 3600_000
+    : 0;
+  async function cancel() {
+    if (!target) return;
+    setBusy(true);
+    try {
+      const res = await mobileRequest<AppointmentActionResponse>(
+        connection.baseUrl,
+        `/api/appointments/${target.id}/cancel-by-member`,
+        { method: "POST" },
+        connection.token,
+      );
+      setNote(
+        res.ptSessionOutcome === "REFUND"
+          ? `Đã hủy lịch ${res.appointment.code}. Bạn được hoàn lại 1 buổi PT (còn ${res.ptAvailable}).`
+          : `Đã hủy lịch ${res.appointment.code}. Hủy sát giờ nên 1 buổi PT đã bị trừ (còn ${res.ptAvailable}).`,
+      );
+      setTarget(undefined);
+      onChanged();
+    } catch (cause) {
+      setNote(errorText(cause, "Không hủy được lịch."));
+      setTarget(undefined);
+    } finally {
+      setBusy(false);
+      retry();
+    }
+  }
+  return (
+    <View style={s.card}>
+      <Text style={s.name}>Lịch hẹn PT của tôi</Text>
+      {data ? (
+        <>
+          <Text style={s.text}>Số buổi PT còn lại: {data.ptAvailable ?? 0}</Text>
+          {!data.items.length && (
+            <Text style={s.meta}>Bạn chưa đặt lịch hẹn nào.</Text>
+          )}
+          {data.items.map((a) => (
+            <View key={a.id} style={s.item}>
+              <Text style={s.text}>
+                {a.workDate.split("-").reverse().join("/")} ·{" "}
+                {hourInVietnam.format(new Date(a.startTime))} –{" "}
+                {hourInVietnam.format(new Date(a.endTime))}
+              </Text>
+              <Text style={s.meta}>
+                PT {a.trainer.displayName} · {statusText[a.status]}
+                {a.compensationGranted ? " · được đền bù +1 buổi" : ""}
+              </Text>
+              {a.status === "CONFIRMED" &&
+                new Date(a.startTime).getTime() > Date.now() && (
+                  <Action label="Hủy lịch" onPress={() => setTarget(a)} />
+                )}
+            </View>
+          ))}
+        </>
+      ) : (
+        <RequestStatus error={error} retry={retry} />
+      )}
+      {!!note && (
+        <Text accessibilityRole="alert" style={s.text}>
+          {note}
+        </Text>
+      )}
+      {target && (
+        <Modal transparent animationType="fade" onRequestClose={() => setTarget(undefined)}>
+          <View style={s.backdrop}>
+            <View style={s.card}>
+              <Text style={s.name}>Hủy lịch hẹn {target.code}?</Text>
+              <Text style={hoursLeft >= MEMBER_FREE_CANCEL_HOURS ? s.text : s.warn}>
+                {hoursLeft >= MEMBER_FREE_CANCEL_HOURS
+                  ? "Còn trên 12 giờ: Bạn được hoàn lại 1 buổi PT."
+                  : "Còn dưới 12 giờ: Bạn sẽ bị trừ 1 buổi PT nếu xác nhận hủy."}
+              </Text>
+              <View style={s.row}>
+                <Action label="Giữ lịch" onPress={() => setTarget(undefined)} />
+                <Action
+                  label={busy ? "Đang hủy…" : "Xác nhận hủy"}
+                  onPress={() => {
+                    if (!busy) void cancel();
+                  }}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+    </View>
+  );
+}
+
 export function PtBookingPanel({
   onBack,
   ...connection
@@ -199,6 +358,7 @@ export function PtBookingPanel({
   const [specialty, setSpecialty] = useState("");
   const [path, setPath] = useState("/api/trainers");
   const [selected, setSelected] = useState<string>();
+  const [version, setVersion] = useState(0);
   const { data, error, retry } = useTrainerRequest<TrainerListResponse>(
     connection,
     path,
@@ -222,6 +382,11 @@ export function PtBookingPanel({
         <Text accessibilityRole="header" style={s.heading}>
           Huấn luyện viên
         </Text>
+        <MyAppointments
+          {...connection}
+          version={version}
+          onChanged={() => setVersion((v) => v + 1)}
+        />
         <TextInput
           accessibilityLabel="Tên huấn luyện viên"
           placeholder="Tên huấn luyện viên"
@@ -270,6 +435,7 @@ export function PtBookingPanel({
           {...connection}
           id={selected}
           onClose={() => setSelected(undefined)}
+          onBooked={() => setVersion((v) => v + 1)}
         />
       )}
     </View>
@@ -292,6 +458,15 @@ const s = StyleSheet.create({
   card: { backgroundColor: C.cardDark, borderRadius: 18, padding: 16, gap: 10 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   summary: { flex: 1, gap: 5 },
+  grow: { flex: 1 },
+  item: { gap: 6, paddingVertical: 6 },
+  warn: { color: "#ffb4a8", fontSize: 16, fontWeight: "700" },
+  backdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(0,0,0,0.6)",
+  },
   avatar: { width: 56, height: 56, borderRadius: 28 },
   link: { color: C.lime, fontWeight: "700" },
   action: {

@@ -327,6 +327,8 @@ async function main() {
         });
       }
 
+      await seedPtBookings(tx);
+
       const equipmentSamples = [
         {
           code: "EQ-CARDIO-001",
@@ -552,6 +554,70 @@ main()
 // ===== UC13 — Nhật ký tập luyện: dữ liệu mẫu cho HV001 =====
 // Two sessions in 11/2026 and baseline records for Bench Press (80kg x 5 -> 93.33kg)
 // and Deadlift. Logging Bench Press 85kg x 5 (99.17kg) afterwards shows a new PR.
+// UC08: cấp buổi PT cho HV002 và tạo 3 lịch hẹn mẫu (còn >12h, còn <6h, đã qua giờ để thử NO_SHOW).
+// Chạy lại seed không tạo trùng: mỗi lịch có mã cố định LHSEED0x.
+async function seedPtBookings(tx: Prisma.TransactionClient) {
+  const member = await tx.memberProfile.findUnique({ where: { memberCode: "HV002" } });
+  const trainer = await tx.trainerProfile.findUnique({ where: { trainerCode: "PT001" } });
+  const membership = await tx.membership.findUnique({ where: { code: "DK0000" } });
+  if (!member || !trainer || !membership) return;
+  // 13 buổi được cấp; sau 3 lịch mẫu còn 10 buổi khả dụng.
+  if (membership.ptSessionsSnapshot < 13) {
+    await tx.$executeRawUnsafe("SET LOCAL fithub.allow_pt_compensation = 'on'");
+    await tx.membership.update({
+      where: { id: membership.id },
+      data: { ptSessionsSnapshot: 13, ptSessionsRemaining: 13 - membership.ptSessionsSnapshot + membership.ptSessionsRemaining },
+    });
+  }
+  const gym = (offsetMs: number) => new Date(Date.now() + 7 * 3600_000 + offsetMs);
+  const ymdOf = (d: Date) => d.toISOString().slice(0, 10);
+  const day = 86400_000;
+  const startOf = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
+  const plans: { code: string; start: Date | null }[] = [
+    { code: "LHSEED01", start: startOf(ymdOf(gym(2 * day)), "14:00") },
+    {
+      code: "LHSEED02",
+      // Cách bây giờ khoảng 3 giờ, chỉ tạo được khi còn nằm trong 06:00-20:00 giờ phòng tập.
+      start: (() => {
+        const t = gym(3 * 3600_000);
+        const hour = t.getUTCHours() + 1;
+        return hour >= 6 && hour <= 20 ? startOf(ymdOf(t), String(hour).padStart(2, "0") + ":00") : null;
+      })(),
+    },
+    { code: "LHSEED03", start: startOf(ymdOf(gym(-1 * day)), "08:00") },
+  ];
+  for (const plan of plans) {
+    if (!plan.start || (await tx.appointment.findUnique({ where: { code: plan.code } }))) continue;
+    const workDate = new Date(ymdOf(new Date(plan.start.getTime() + 7 * 3600_000)));
+    const slot = await tx.workingSlot.upsert({
+      where: { trainerId_startTime: { trainerId: trainer.id, startTime: plan.start } },
+      create: {
+        trainerId: trainer.id,
+        workDate,
+        startTime: plan.start,
+        endTime: new Date(plan.start.getTime() + 3600_000),
+        status: "BOOKED",
+        memberId: member.id,
+      },
+      update: {},
+    });
+    if (slot.status !== "BOOKED" || slot.memberId !== member.id) continue;
+    await tx.appointment.create({
+      data: {
+        code: plan.code,
+        memberId: member.id,
+        trainerId: trainer.id,
+        slotId: slot.id,
+        membershipId: membership.id,
+      },
+    });
+    await tx.membership.update({
+      where: { id: membership.id },
+      data: { ptSessionsRemaining: { decrement: 1 } },
+    });
+  }
+}
+
 async function seedWorkouts(tx: Prisma.TransactionClient) {
   const member = await tx.memberProfile.findUniqueOrThrow({
     where: { memberCode: "HV001" },

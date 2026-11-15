@@ -39,6 +39,7 @@ enum PaymentStatus {
   PENDING
   CONFIRMED
   CANCELLED
+  FAILED
 }
 
 enum PaymentMethod {
@@ -87,6 +88,7 @@ model User {
   reminders           Reminder[]
   notifications       Notification[]
   pushDevices         PushDevice[]
+  verifiedAppointments Appointment[]      @relation("AppointmentVerifier")
 }
 
 model Session {
@@ -120,6 +122,7 @@ model AuthEvent {
 
 model MemberProfile {
   bookedTrainerSlots WorkingSlot[]
+  appointments       Appointment[]
   id                 String           @id @default(uuid()) @db.Uuid
   userId             String           @unique @db.Uuid
   user               User             @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -182,6 +185,7 @@ model Membership {
   payment                 Payment?
   checkIns                CheckInRecord[]
   freezePeriods           FreezePeriod[]
+  appointments            Appointment[]
 
   @@index([memberId, status])
 }
@@ -214,6 +218,10 @@ model Payment {
 
   @@index([status, confirmedAt])
   @@index([createdAt, id])
+
+  transferReference String?
+  vnpAttempts       Int       @default(0)
+  vnpExpiresAt      DateTime? @db.Timestamptz(3)
 }
 
 model AuditLog {
@@ -412,6 +420,7 @@ enum TrainerWorkStatus {
 model TrainerProfile {
   workStatus      TrainerWorkStatus      @default(ACTIVE)
   workingSlots    WorkingSlot[]
+  appointments    Appointment[]
   id              String                 @id @default(uuid()) @db.Uuid
   userId          String                 @unique @db.Uuid
   user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -456,6 +465,7 @@ model WorkingSlot {
   unavailableReason String?
   memberId          String?           @db.Uuid
   member            MemberProfile?    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  appointments      Appointment[]
 
   @@unique([trainerId, workDate, startTime])
   @@unique([trainerId, startTime])
@@ -667,4 +677,48 @@ model Invoice {
   errorMessage String?
   createdAt    DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+}
+
+// ===== UC08 - Dat lich hen PT 1-1 (SAD 4.5) =====
+enum AppointmentStatus {
+  CONFIRMED
+  CANCELLED_BY_MEMBER
+  CANCELLED_BY_PT
+  NO_SHOW
+  COMPLETED
+}
+
+// HELD: buoi PT dang duoc giu (da tru khoi ptSessionsRemaining); CONSUMED: tru han;
+// REFUNDED: da hoan lai cho hoi vien.
+enum PtSessionState {
+  HELD
+  CONSUMED
+  REFUNDED
+}
+
+model Appointment {
+  id                  String            @id @default(uuid()) @db.Uuid
+  code                String            @unique
+  memberId            String            @db.Uuid
+  member              MemberProfile     @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  trainerId           String            @db.Uuid
+  trainer             TrainerProfile    @relation(fields: [trainerId], references: [id], onDelete: Restrict)
+  slotId              String            @db.Uuid
+  slot                WorkingSlot       @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  // Goi tap ma buoi PT duoc giu; dung de hoan/tru dung goi.
+  membershipId        String            @db.Uuid
+  membership          Membership        @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  status              AppointmentStatus @default(CONFIRMED)
+  ptSessionState      PtSessionState    @default(HELD)
+  cancelReason        String?
+  cancelledAt         DateTime?         @db.Timestamptz(3)
+  compensationGranted Boolean           @default(false)
+  verifiedById        String?           @db.Uuid
+  verifiedBy          User?             @relation("AppointmentVerifier", fields: [verifiedById], references: [id], onDelete: Restrict)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@index([memberId, status])
+  @@index([trainerId, status])
+  @@index([slotId])
 }

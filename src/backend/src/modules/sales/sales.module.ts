@@ -13,10 +13,20 @@ import {
   Query,
   ValidationPipe,
 } from "@nestjs/common";
-import { IsInt, IsString, IsUUID, Matches, Min } from "class-validator";
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  Min,
+} from "class-validator";
 import { DatabaseModule } from "../../database/database.module";
 import { AuthModule } from "../auth/auth.module";
 import { AuthService } from "../auth/auth.service";
+import { PaymentsModule } from "../payments/payments.module";
 import { SalesService } from "./sales.service";
 class RegisterDto {
   @IsUUID() requestId!: string;
@@ -27,6 +37,9 @@ class RegisterDto {
 class ConfirmDto {
   @IsUUID() idempotencyKey!: string;
   @IsInt() @Min(1) amount!: number;
+  // UC15: Admin chọn hình thức thu tại quầy; mặc định CASH.
+  @IsOptional() @IsIn(["CASH", "BANK_TRANSFER"]) method?: "CASH" | "BANK_TRANSFER";
+  @IsOptional() @IsString() @MaxLength(100) reference?: string;
 }
 @Controller("api")
 class SalesController {
@@ -102,7 +115,7 @@ class SalesController {
   }
 }
 @Module({
-  imports: [DatabaseModule, AuthModule],
+  imports: [DatabaseModule, AuthModule, PaymentsModule],
   controllers: [SalesController],
   providers: [SalesService],
 })

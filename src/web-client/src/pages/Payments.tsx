@@ -8,9 +8,12 @@ import {
 } from "react-router-dom";
 import type {
   ConfirmPaymentRequest,
+  CounterPaymentMethod,
+  InvoiceDto,
   PaymentDetailDto,
   PaymentPageDto,
   PurchaseOptionsDto,
+  ReconcilePaymentRequest,
   RegisterMembershipRequest,
 } from "@fithub/contracts";
 import { Empty, Notice, PageHeading } from "../components";
@@ -20,9 +23,19 @@ import { date, money, packageEnd, today } from "../data";
 import { InfoRows } from "./Members";
 const statuses: Record<string, string> = {
   PENDING: "Chờ thanh toán",
-  CONFIRMED: "Đã thu · Tiền mặt",
+  CONFIRMED: "Đã thu",
   CANCELLED: "Đã hủy",
+  FAILED: "Thanh toán thất bại",
 };
+const methods: Record<string, string> = {
+  CASH: "Tiền mặt",
+  BANK_TRANSFER: "Chuyển khoản",
+  VNPAY: "VNPay",
+};
+const statusLabel = (p: PaymentDetailDto) =>
+  p.status === "CONFIRMED"
+    ? `Đã thu · ${methods[p.method] ?? p.method}${p.reconciliationStatus === "MISMATCHED" ? " · Cần đối soát" : ""}`
+    : (statuses[p.status] ?? p.status);
 const endDate = (value: string) =>
   date(
     new Date(Date.parse(`${value}T00:00:00Z`) - 86400000)
@@ -227,12 +240,30 @@ function PaymentInfo({ p }: { p: PaymentDetailDto }) {
             `${date(p.membership.startsOn)} – ${endDate(p.membership.endsBefore)}`,
           ],
           ["Tổng tiền", money(p.amount)],
-          ["Trạng thái", statuses[p.status]],
+          ["Trạng thái", statusLabel(p)],
+          [
+            "Hình thức thanh toán",
+            p.status === "CONFIRMED" || p.method !== "CASH"
+              ? (methods[p.method] ?? p.method)
+              : "Chưa xác định",
+          ],
+          ...(p.transferReference
+            ? ([["Tham chiếu chuyển khoản", p.transferReference]] as [
+                string,
+                string,
+              ][])
+            : []),
           [
             "Ngày xác nhận",
             p.confirmedAt ? date(p.confirmedAt) : "Chưa xác nhận",
           ],
-          ["Người xác nhận", p.confirmedBy || "Chưa xác nhận"],
+          [
+            "Người xác nhận",
+            p.confirmedBy ||
+              (p.method === "VNPAY" && p.confirmedAt
+                ? "Cổng VNPay (tự động)"
+                : "Chưa xác nhận"),
+          ],
         ]}
       />
       {p.isTest && (
@@ -241,6 +272,190 @@ function PaymentInfo({ p }: { p: PaymentDetailDto }) {
         </Notice>
       )}
     </>
+  );
+}
+function Receipt({ invoice }: { invoice: InvoiceDto }) {
+  const r = invoice.receipt;
+  if (!r) return null;
+  const rows: [string, string][] = [
+    ["Số hóa đơn", invoice.code ?? "—"],
+    ["Ngày phát hành", invoice.issuedAt ? date(invoice.issuedAt) : "—"],
+    ["Khách hàng", `${r.buyerName} · ${r.memberCode}`],
+    ["Gói tập", r.packageName],
+    ["Thời hạn", r.period],
+    ["Số tiền", money(r.amount)],
+    ["Hình thức thanh toán", r.method],
+    ["Ngày thanh toán", date(r.paidAt)],
+    ["Mã giao dịch", r.paymentCode],
+    ...(r.cashier ? ([["Thu ngân", r.cashier]] as [string, string][]) : []),
+  ];
+  return (
+    <div className="receipt-print panel" aria-label="Biên lai thanh toán">
+      <style>{`@media print { body * { visibility: hidden } .receipt-print, .receipt-print * { visibility: visible } .receipt-print { position: absolute; inset: 0; border: 0 } .receipt-print .no-print { display: none } }`}</style>
+      <h2>Biên lai thanh toán gói tập</h2>
+      <InfoRows rows={rows} />
+      <p>
+        <small>
+          Hóa đơn điện tử mô phỏng (SIMULATED), chưa kết nối nhà cung cấp hóa
+          đơn.
+        </small>
+      </p>
+      <button
+        type="button"
+        className="button primary no-print"
+        onClick={() => window.print()}
+      >
+        In biên lai
+      </button>
+    </div>
+  );
+}
+function InvoiceSection({
+  p,
+  onChanged,
+}: {
+  p: PaymentDetailDto;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [show, setShow] = useState(false);
+  async function retry() {
+    setBusy(true);
+    setError("");
+    try {
+      await fetchFromApi<PaymentDetailDto>(
+        `/api/payments/${p.id}/retry-invoice`,
+        { method: "POST", body: "{}" },
+      );
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không thể phát hành hóa đơn.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const inv = p.invoice;
+  return (
+    <div className="panel" aria-label="Hóa đơn">
+      <h2>Hóa đơn</h2>
+      {inv?.status === "ISSUED" ? (
+        <>
+          <InfoRows
+            rows={[
+              ["Số hóa đơn", inv.code ?? "—"],
+              ["Ngày phát hành", inv.issuedAt ? date(inv.issuedAt) : "—"],
+            ]}
+          />
+          <div className="actions">
+            <button
+              type="button"
+              className="button outline"
+              onClick={() => setShow((v) => !v)}
+            >
+              {show ? "Ẩn biên lai" : "Xem / In biên lai"}
+            </button>
+          </div>
+          {show && <Receipt invoice={inv} />}
+        </>
+      ) : (
+        <>
+          <Notice error={inv?.status === "FAILED"}>
+            {inv?.status === "FAILED"
+              ? `Khoản thu đã ghi nhận nhưng chưa phát hành được hóa đơn${inv.errorMessage ? `: ${inv.errorMessage}` : "."}`
+              : "Hóa đơn đang được phát hành. Làm mới trang hoặc bấm phát hành lại nếu chưa thấy."}
+          </Notice>
+          {error && <Notice error>{error}</Notice>}
+          <div className="actions">
+            <button
+              type="button"
+              className="button primary"
+              disabled={busy}
+              onClick={() => void retry()}
+            >
+              {busy ? "Đang phát hành…" : "Phát hành lại hóa đơn"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+function ReconcileSection({
+  p,
+  onChanged,
+}: {
+  p: PaymentDetailDto;
+  onChanged: () => void;
+}) {
+  const needsGrant = p.benefitStatus === "NEEDS_REVIEW";
+  const [action, setAction] =
+    useState<ReconcilePaymentRequest["action"]>(needsGrant ? "GRANT" : "DISMISS"),
+    [note, setNote] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const body: ReconcilePaymentRequest = {
+        action,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      };
+      await fetchFromApi<PaymentDetailDto>(`/api/payments/${p.id}/reconcile`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không thể đối soát.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="panel" onSubmit={submit} aria-label="Đối soát giao dịch">
+      <h2>Cần đối soát</h2>
+      <Notice error>
+        {needsGrant
+          ? "Đã nhận tiền qua VNPay nhưng hệ thống chưa cấp được quyền lợi gói tập. Kiểm tra rồi cấp lại gói hoặc ghi nhận đã xử lý ngoài hệ thống (ví dụ hoàn tiền)."
+          : "Hệ thống nhận thêm một khoản thanh toán cho giao dịch này (đã thu bằng kênh khác). Kiểm tra và hoàn tiền cho hội viên nếu cần, rồi ghi nhận đã xử lý."}
+      </Notice>
+      <div className="form-grid">
+        <label className="field">
+          Hướng xử lý
+          <select
+            aria-label="Hướng xử lý"
+            value={action}
+            disabled={busy}
+            onChange={(e) =>
+              setAction(e.target.value as ReconcilePaymentRequest["action"])
+            }
+          >
+            {needsGrant && <option value="GRANT">Cấp lại quyền lợi gói</option>}
+            <option value="DISMISS">Đã xử lý ngoài hệ thống</option>
+          </select>
+        </label>
+        <label className="field">
+          Ghi chú {action === "DISMISS" ? "(bắt buộc)" : "(tùy chọn)"}
+          <input
+            aria-label="Ghi chú đối soát"
+            maxLength={500}
+            value={note}
+            required={action === "DISMISS"}
+            disabled={busy}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </label>
+      </div>
+      {error && <Notice error>{error}</Notice>}
+      <div className="actions">
+        <button className="button primary" disabled={busy}>
+          {busy ? "Đang lưu…" : "Xác nhận đối soát"}
+        </button>
+      </div>
+    </form>
   );
 }
 export function PaymentPage() {
@@ -252,7 +467,9 @@ export function PaymentPage() {
   );
   const [saveError, setSaveError] = useState(""),
     [busy, setBusy] = useState(false),
-    [cancel, setCancel] = useState(false);
+    [cancel, setCancel] = useState(false),
+    [method, setMethod] = useState<CounterPaymentMethod>("CASH"),
+    [reference, setReference] = useState("");
   const lock = useRef(false);
   const key = useRef<string | null>(null);
   async function decide(isCancel = false) {
@@ -265,6 +482,10 @@ export function PaymentPage() {
       const body: ConfirmPaymentRequest = {
         idempotencyKey: key.current,
         amount: data.amount,
+        method,
+        ...(method === "BANK_TRANSFER" && reference.trim()
+          ? { reference: reference.trim() }
+          : {}),
       };
       await fetchFromApi(
         `/api/payments/${data.id}/${isCancel ? "cancel" : "confirm"}`,
@@ -294,14 +515,64 @@ export function PaymentPage() {
       ) : (
         <section className="panel">
           <PaymentInfo p={data} />
-          {data.status === "PENDING" ? (
+          {data.status === "PENDING" || data.status === "FAILED" ? (
             <>
-              <p>Chỉ xác nhận sau khi đã nhận đủ tiền mặt từ hội viên.</p>
+              {data.status === "FAILED" && (
+                <Notice error>
+                  Thanh toán VNPay không thành công. Hội viên có thể thử lại
+                  trên ứng dụng hoặc bạn có thể thu trực tiếp tại quầy.
+                </Notice>
+              )}
+              {data.onlineExpiresAt && (
+                <Notice>
+                  Hội viên đang thanh toán qua VNPay (hết hạn lúc{" "}
+                  {new Date(data.onlineExpiresAt).toLocaleTimeString("vi-VN")}
+                  ). Chờ kết quả hoặc làm mới sau khi hết hạn rồi mới thu tại
+                  quầy để tránh thu hai lần.
+                </Notice>
+              )}
+              <div className="form-grid">
+                <label className="field">
+                  Hình thức thu tại quầy
+                  <select
+                    aria-label="Hình thức thu tại quầy"
+                    value={method}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setMethod(e.target.value as CounterPaymentMethod)
+                    }
+                  >
+                    <option value="CASH">Tiền mặt</option>
+                    <option value="BANK_TRANSFER">Chuyển khoản</option>
+                  </select>
+                </label>
+                {method === "BANK_TRANSFER" && (
+                  <label className="field">
+                    Tham chiếu chuyển khoản (nếu có)
+                    <input
+                      aria-label="Tham chiếu chuyển khoản"
+                      maxLength={100}
+                      value={reference}
+                      disabled={busy}
+                      onChange={(e) => setReference(e.target.value)}
+                    />
+                  </label>
+                )}
+              </div>
+              <p>
+                {method === "CASH"
+                  ? "Chỉ xác nhận sau khi đã nhận đủ tiền mặt từ hội viên."
+                  : "Chỉ xác nhận sau khi tiền đã vào tài khoản của phòng tập."}
+              </p>
               {saveError && <Notice error>{saveError}</Notice>}
               <div className="actions">
                 <button
                   className="button primary"
-                  disabled={busy || data.member.accountStatus !== "ACTIVE"}
+                  disabled={
+                    busy ||
+                    data.member.accountStatus !== "ACTIVE" ||
+                    !!data.onlineExpiresAt
+                  }
                   onClick={() => void decide()}
                 >
                   {busy
@@ -375,14 +646,22 @@ export function SuccessPage() {
       ) : (
         <section className="panel">
           <h2>
-            {data.membership.status === "SCHEDULED"
-              ? "Gói tập đã lên lịch"
-              : "Khoản thu đã được ghi nhận"}
+            {data.benefitStatus === "NEEDS_REVIEW"
+              ? "Đã nhận tiền · gói tập chờ đối soát"
+              : data.membership.status === "SCHEDULED"
+                ? "Gói tập đã lên lịch"
+                : "Khoản thu đã được ghi nhận"}
           </h2>
           <PaymentInfo p={data} />
-          <p>
-            Khoản thu và gói tập đã lưu trên hệ thống. Không cần thanh toán lại.
-          </p>
+          {data.reconciliationStatus === "MISMATCHED" ? (
+            <ReconcileSection p={data} onChanged={reload} />
+          ) : (
+            <p>
+              Khoản thu và gói tập đã lưu trên hệ thống. Không cần thanh toán
+              lại.
+            </p>
+          )}
+          <InvoiceSection p={data} onChanged={reload} />
           <div className="actions">
             <Link className="button outline" to={`/members/${data.member.id}`}>
               Xem hồ sơ và gói tập
@@ -452,6 +731,8 @@ export function HistoryPage() {
           <option value="PENDING">Chờ thanh toán</option>
           <option value="CONFIRMED">Đã thu</option>
           <option value="CANCELLED">Đã hủy</option>
+          <option value="FAILED">Thanh toán thất bại</option>
+          <option value="NEEDS_REVIEW">Cần đối soát</option>
         </select>
         <button className="button primary">Tìm kiếm</button>
         {params.get("member") && (
@@ -501,7 +782,7 @@ export function HistoryPage() {
                       <td>{p.membership.packageName}</td>
                       <td>{date(p.createdAt)}</td>
                       <td>{money(p.amount)}</td>
-                      <td>{statuses[p.status]}</td>
+                      <td>{statusLabel(p)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -22,7 +22,7 @@ import type { MobileSession, ScreenId } from "./types";
 // yet, so reminders about PT sessions open the package screen, which holds the schedule.
 const TARGET: Record<NotificationTargetScreen, ScreenId> = {
   MY_PACKAGE: "02_MY_PACKAGE",
-  PT_APPOINTMENTS: "02_MY_PACKAGE",
+  PT_APPOINTMENTS: "10_TRAINERS",
 };
 const FILTERS = [
   { key: "ALL", label: "Tất cả" },
