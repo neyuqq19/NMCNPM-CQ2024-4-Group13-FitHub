@@ -113,6 +113,12 @@ before(async () => {
   await app.init();
   api = request(app.getHttpServer());
   service = app.get(NotificationsService);
+  // Since UC08 the Appointment table exists, so the real source would treat the random
+  // appointment ids below as cancelled. These tests cover UC16 only: every appointment is
+  // CONFIRMED unless a test swaps the source (BR03 case). UC08's own tests use real rows.
+  (service as unknown as { appointments: { isConfirmed(id: string): Promise<boolean> } }).appointments = {
+    isConfirmed: async () => true,
+  };
   // Leftovers of earlier runs (paid memberships cannot be deleted) must not be dispatched by this one.
   await db.reminder.deleteMany({ where: { recipient: { email: { startsWith: "uc16-" } } } });
   const p = await db.package.create({
