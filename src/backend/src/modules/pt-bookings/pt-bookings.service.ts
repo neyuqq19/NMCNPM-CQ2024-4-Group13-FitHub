@@ -9,6 +9,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import type {
   AppointmentActionResponse,
+  AppointmentPreviewDto,
   AppointmentDto,
   AppointmentPageDto,
   AppointmentStatus,
@@ -110,13 +111,60 @@ export class PtBookingsService {
   ) {}
   now = () => new Date();
 
+  /** Read-only estimate; book() rechecks eligibility under locks before saving. */
+  async preview(
+    user: CurrentUser,
+    slotId: unknown,
+  ): Promise<AppointmentPreviewDto> {
+    if (user.role !== "MEMBER") throw forbidden();
+    if (typeof slotId !== "string" || !/^[0-9a-f-]{36}$/i.test(slotId))
+      throw bad("INVALID_SLOT", "Vui lòng chọn ca tập hợp lệ.");
+    const memberId = await this.resolveMemberId(user, undefined);
+    const slot = await this.prisma.workingSlot.findFirst({
+      where: {
+        id: slotId,
+        status: "OPEN",
+        startTime: { gt: this.now() },
+        trainer: {
+          workStatus: "ACTIVE",
+          user: { role: "TRAINER", status: "ACTIVE" },
+        },
+      },
+    });
+    if (!slot)
+      throw conflict("SLOT_UNAVAILABLE", "Ca này hiện không nhận đặt lịch.");
+    const m = await this.prisma.membership.findFirst({
+      where: {
+        memberId,
+        status: "ACTIVE",
+        ptSessionsRemaining: { gte: 1 },
+        endsBefore: { gt: slot.workDate },
+      },
+      orderBy: { endsBefore: "asc" },
+    });
+    if (!m)
+      throw bad(
+        "INSUFFICIENT_PT_SESSIONS",
+        "Bạn không có gói còn buổi PT hợp lệ cho ngày tập này.",
+      );
+    return {
+      membership: {
+        id: m.id,
+        packageName: m.packageNameSnapshot,
+        ptSessionsRemaining: m.ptSessionsRemaining,
+        endsBefore: m.endsBefore.toISOString().slice(0, 10),
+      },
+    };
+  }
+
   // ------------------------------------------------------------ APT-01
   /** bookAppointment: giữ ca + giữ 1 buổi PT trong cùng một transaction (SR02). */
   async book(
     user: CurrentUser,
     body: { slotId?: unknown; memberId?: unknown } | undefined,
   ): Promise<AppointmentActionResponse> {
-    if (user.role === "TRAINER") throw forbidden("PT không đặt lịch cho hội viên.");
+    if (user.role === "TRAINER")
+      throw forbidden("PT không đặt lịch cho hội viên.");
     const slotId = body?.slotId;
     if (typeof slotId !== "string" || !/^[0-9a-f-]{36}$/i.test(slotId))
       throw bad("INVALID_SLOT", "Vui lòng chọn ca tập hợp lệ.");
@@ -154,7 +202,10 @@ export class PtBookingsService {
           slot.trainer.workStatus !== "ACTIVE" ||
           slot.trainer.user.status !== "ACTIVE"
         )
-          throw conflict("SLOT_UNAVAILABLE", "Ca này hiện không nhận đặt lịch.");
+          throw conflict(
+            "SLOT_UNAVAILABLE",
+            "Ca này hiện không nhận đặt lịch.",
+          );
         if (slot.startTime <= now)
           throw bad("SLOT_IN_PAST", "Ca tập này đã bắt đầu hoặc đã qua.");
 
@@ -207,10 +258,15 @@ export class PtBookingsService {
         // holdPTSession: giữ 1 buổi (giảm ptSessionsRemaining) cùng transaction.
         await tx.membership.update({
           where: { id: membershipId },
-          data: { ptSessionsRemaining: { decrement: 1 }, version: { increment: 1 } },
+          data: {
+            ptSessionsRemaining: { decrement: 1 },
+            version: { increment: 1 },
+          },
         });
 
-        const seq = await tx.$queryRaw<{ n: number }[]>`SELECT nextval('appointment_code_seq')::int AS n`;
+        const seq = await tx.$queryRaw<
+          { n: number }[]
+        >`SELECT nextval('appointment_code_seq')::int AS n`;
         const appointment = await tx.appointment.create({
           data: {
             code: `LH${String(seq[0]!.n).padStart(6, "0")}`,
@@ -265,7 +321,11 @@ export class PtBookingsService {
       }),
       this.ptAvailable(this.prisma, profile.id),
     ]);
-    return { items: rows.map(toAppointmentDto), total: rows.length, ptAvailable };
+    return {
+      items: rows.map(toAppointmentDto),
+      total: rows.length,
+      ptAvailable,
+    };
   }
 
   async list(
@@ -284,7 +344,8 @@ export class PtBookingsService {
     } else if (typeof q.trainerId === "string" && q.trainerId) {
       where.trainerId = q.trainerId;
     }
-    if (typeof q.memberId === "string" && q.memberId) where.memberId = q.memberId;
+    if (typeof q.memberId === "string" && q.memberId)
+      where.memberId = q.memberId;
     if (q.status !== undefined && q.status !== "") {
       if (!STATUSES.includes(q.status as AppointmentStatus))
         throw bad("INVALID_STATUS", "Trạng thái lịch hẹn không hợp lệ.");
@@ -311,7 +372,10 @@ export class PtBookingsService {
 
   // ------------------------------------------------------------ APT-03
   /** cancelAppointmentByMember (A1): mốc 12 giờ. */
-  async cancelByMember(user: CurrentUser, id: string): Promise<AppointmentActionResponse> {
+  async cancelByMember(
+    user: CurrentUser,
+    id: string,
+  ): Promise<AppointmentActionResponse> {
     if (user.role !== "MEMBER") throw forbidden();
     const now = this.now();
     let outcome: PtSessionOutcome = "REFUND";
@@ -354,8 +418,7 @@ export class PtBookingsService {
   ): Promise<AppointmentActionResponse> {
     if (user.role === "MEMBER") throw forbidden();
     const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
-    if (!reason)
-      throw bad("REASON_REQUIRED", "Vui lòng nhập lý do hủy lịch.");
+    if (!reason) throw bad("REASON_REQUIRED", "Vui lòng nhập lý do hủy lịch.");
     if (reason.length > 500)
       throw bad("REASON_TOO_LONG", "Lý do hủy tối đa 500 ký tự.");
     const now = this.now();
@@ -371,7 +434,11 @@ export class PtBookingsService {
       // PT không đứng lớp được: không mở lại ca cho người khác đặt.
       await tx.workingSlot.update({
         where: { id: appt.slotId },
-        data: { status: "UNAVAILABLE", unavailableReason: reason, memberId: null },
+        data: {
+          status: "UNAVAILABLE",
+          unavailableReason: reason,
+          memberId: null,
+        },
       });
       const updated = await tx.appointment.update({
         where: { id },
@@ -397,7 +464,10 @@ export class PtBookingsService {
 
   // ------------------------------------------------------------ APT-05
   /** verifyNoShow (A3): chỉ ADMIN, chỉ sau khi ca kết thúc. */
-  async verifyNoShow(user: CurrentUser, id: string): Promise<AppointmentActionResponse> {
+  async verifyNoShow(
+    user: CurrentUser,
+    id: string,
+  ): Promise<AppointmentActionResponse> {
     if (user.role !== "ADMIN") throw forbidden();
     const now = this.now();
     const row = await this.prisma.$transaction(async (tx) => {
@@ -410,7 +480,11 @@ export class PtBookingsService {
       // consumePTSession: buổi đã bị giữ từ lúc đặt nên chỉ chốt trạng thái, không hoàn.
       const updated = await tx.appointment.update({
         where: { id },
-        data: { status: "NO_SHOW", ptSessionState: "CONSUMED", verifiedById: user.id },
+        data: {
+          status: "NO_SHOW",
+          ptSessionState: "CONSUMED",
+          verifiedById: user.id,
+        },
         include,
       });
       await this.audit(tx, user.id, id, "VERIFY_NO_SHOW", [
@@ -456,18 +530,25 @@ export class PtBookingsService {
 
   private assertNotStarted(appt: AppointmentRow, now: Date) {
     if (appt.slot.startTime <= now)
-      throw bad("APPOINTMENT_STARTED", "Ca tập đã bắt đầu, không thể hủy lịch.");
+      throw bad(
+        "APPOINTMENT_STARTED",
+        "Ca tập đã bắt đầu, không thể hủy lịch.",
+      );
   }
 
   /** refundPTSession: cộng lại buổi (đền bù thì +2: 1 hoàn + 1 đền bù), cùng transaction. */
   private async credit(tx: Tx, membershipId: string, delta: number) {
     await tx.$queryRaw`SELECT id FROM "Membership" WHERE id = ${membershipId}::uuid FOR UPDATE`;
-    const m = await tx.membership.findUniqueOrThrow({ where: { id: membershipId } });
+    const m = await tx.membership.findUniqueOrThrow({
+      where: { id: membershipId },
+    });
     const remaining = m.ptSessionsRemaining + delta;
     const snapshot = Math.max(m.ptSessionsSnapshot, remaining);
     // Trigger của UC05 chỉ cho nâng snapshot khi bật cờ đền bù này.
     if (snapshot > m.ptSessionsSnapshot)
-      await tx.$executeRawUnsafe("SET LOCAL fithub.allow_pt_compensation = 'on'");
+      await tx.$executeRawUnsafe(
+        "SET LOCAL fithub.allow_pt_compensation = 'on'",
+      );
     await tx.membership.update({
       where: { id: membershipId },
       data: {
@@ -497,15 +578,30 @@ export class PtBookingsService {
     };
   }
 
-  private audit(tx: Tx, actorId: string, entityId: string, action: string, changedFields: string[]) {
+  private audit(
+    tx: Tx,
+    actorId: string,
+    entityId: string,
+    action: string,
+    changedFields: string[],
+  ) {
     return tx.auditLog.create({
-      data: { actorId, entityType: "Appointment", entityId, action, changedFields },
+      data: {
+        actorId,
+        entityType: "Appointment",
+        entityId,
+        action,
+        changedFields,
+      },
     });
   }
 
   private async dropReminders(appointmentId: string) {
     try {
-      await this.notifications.cancelRemindersBySource("APPOINTMENT", appointmentId);
+      await this.notifications.cancelRemindersBySource(
+        "APPOINTMENT",
+        appointmentId,
+      );
     } catch {
       /* a stale reminder is re-checked against Appointment.status before sending (BR03) */
     }

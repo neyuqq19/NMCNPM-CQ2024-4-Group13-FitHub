@@ -109,7 +109,19 @@ export class TrainersService {
         bio: { not: "" },
         specialties: { isEmpty: false },
       },
-      include: summaryInclude,
+      include: {
+        ...summaryInclude,
+        workingSlots: {
+          where: {
+            status: "OPEN",
+            startTime: { gt: new Date() },
+            trainer: { workStatus: "ACTIVE" },
+          },
+          orderBy: [{ startTime: "asc" }, { id: "asc" }],
+          take: 3,
+          select: { id: true, workDate: true, startTime: true, endTime: true },
+        },
+      },
       orderBy: { trainerCode: "asc" },
     });
     return {
@@ -121,7 +133,15 @@ export class TrainersService {
               s.toLocaleLowerCase("vi").includes(filter),
             ),
         )
-        .map(summary),
+        .map((p) => ({
+          ...summary(p),
+          nextAvailableSlots: p.workingSlots.map((slot) => ({
+            id: slot.id,
+            workDate: slot.workDate.toISOString().slice(0, 10),
+            startTime: slot.startTime.toISOString(),
+            endTime: slot.endTime.toISOString(),
+          })),
+        })),
     };
   }
 
