@@ -20,7 +20,10 @@ export class PtBookingsController {
   ) {}
 
   @Post()
-  async book(@Headers("authorization") h: string, @Body() body: Record<string, unknown> | undefined) {
+  async book(
+    @Headers("authorization") h: string,
+    @Body() body: Record<string, unknown> | undefined,
+  ) {
     return this.bookings.book(await this.auth.validateSession(h), body);
   }
 
@@ -28,6 +31,14 @@ export class PtBookingsController {
   @Get("my")
   async mine(@Headers("authorization") h: string) {
     return this.bookings.listMine(await this.auth.validateSession(h));
+  }
+
+  @Get("booking-preview")
+  async preview(
+    @Headers("authorization") h: string,
+    @Query("slotId") slotId: unknown,
+  ) {
+    return this.bookings.preview(await this.auth.validateSession(h), slotId);
   }
 
   @Get()
@@ -40,7 +51,10 @@ export class PtBookingsController {
 
   @Post(":id/cancel-by-member")
   @HttpCode(200)
-  async cancelByMember(@Headers("authorization") h: string, @Param("id") id: string) {
+  async cancelByMember(
+    @Headers("authorization") h: string,
+    @Param("id") id: string,
+  ) {
     return this.bookings.cancelByMember(await this.auth.validateSession(h), id);
   }
 
@@ -51,12 +65,19 @@ export class PtBookingsController {
     @Param("id") id: string,
     @Body() body: Record<string, unknown> | undefined,
   ) {
-    return this.bookings.cancelByPt(await this.auth.validateSession(h), id, body);
+    return this.bookings.cancelByPt(
+      await this.auth.validateSession(h),
+      id,
+      body,
+    );
   }
 
   @Post(":id/verify-no-show")
   @HttpCode(200)
-  async verifyNoShow(@Headers("authorization") h: string, @Param("id") id: string) {
+  async verifyNoShow(
+    @Headers("authorization") h: string,
+    @Param("id") id: string,
+  ) {
     return this.bookings.verifyNoShow(await this.auth.validateSession(h), id);
   }
 }

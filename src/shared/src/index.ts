@@ -66,10 +66,7 @@ export interface MemberDto {
 }
 
 export type AccountStatus =
-  | "PENDING_VERIFY"
-  | "ACTIVE"
-  | "LOCKED"
-  | "DEACTIVATED";
+  "PENDING_VERIFY" | "ACTIVE" | "LOCKED" | "DEACTIVATED";
 export interface MemberProfileInput {
   displayName: string;
   dateOfBirth?: string | null;
@@ -556,10 +553,7 @@ export interface MyMembershipDetailDto {
 }
 
 export type EquipmentCategory =
-  | "CARDIO"
-  | "STRENGTH"
-  | "FREE_WEIGHT"
-  | "FUNCTIONAL";
+  "CARDIO" | "STRENGTH" | "FREE_WEIGHT" | "FUNCTIONAL";
 
 export type EquipmentStatus = "OPERATIONAL" | "OUT_OF_ORDER" | "RETIRED";
 
@@ -659,6 +653,12 @@ export interface RetireEquipmentRequest {
 export type TrainerWorkStatus = "ACTIVE" | "ON_LEAVE";
 
 export interface TrainerSummaryDto {
+  nextAvailableSlots?: {
+    id: string;
+    workDate: string;
+    startTime: string;
+    endTime: string;
+  }[];
   workStatus: TrainerWorkStatus;
   id: string;
   userId: string;
@@ -782,7 +782,8 @@ export type AppointmentStatus =
 
 export type PtSessionState = "HELD" | "CONSUMED" | "REFUNDED";
 
-export type PtSessionOutcome = "REFUND" | "CONSUME" | "REFUND_WITH_COMPENSATION";
+export type PtSessionOutcome =
+  "REFUND" | "CONSUME" | "REFUND_WITH_COMPENSATION";
 
 export interface AppointmentDto {
   id: string;
@@ -805,6 +806,15 @@ export interface BookAppointmentRequest {
   slotId: string;
   // Chi ADMIN moi can truyen: dat ho hoi vien tai quay.
   memberId?: string;
+}
+
+export interface AppointmentPreviewDto {
+  membership: {
+    id: string;
+    packageName: string;
+    ptSessionsRemaining: number;
+    endsBefore: string;
+  };
 }
 
 export interface CancelAppointmentRequest {
