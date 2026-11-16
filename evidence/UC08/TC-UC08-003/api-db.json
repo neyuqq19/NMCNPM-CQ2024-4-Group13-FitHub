@@ -1,0 +1,70 @@
+{
+  "case": "TC-UC08-003",
+  "executedAt": "2026-11-16T08:25:32.016Z",
+  "build": "3b28ead",
+  "database": {
+    "db": "fithub_test",
+    "port": 55432
+  },
+  "caseId": "TC-UC08-003",
+  "commit": "3b28ead",
+  "slotId": "f59e6d3c-a4b3-4445-b0bf-10ddfb673bb1",
+  "concurrentResponses": [
+    {
+      "member": "HV08315D",
+      "status": 409,
+      "body": {
+        "success": false,
+        "statusCode": 409,
+        "code": "SLOT_ALREADY_BOOKED",
+        "message": "Ca này vừa có người đặt. Vui lòng chọn ca khác.",
+        "timestamp": "2026-11-16T06:42:49.999Z",
+        "path": "/api/appointments"
+      }
+    },
+    {
+      "member": "HV080B32",
+      "status": 201,
+      "body": {
+        "appointment": {
+          "id": "39589442-b525-4cb0-8981-84e6aa2d3d75",
+          "code": "LH000024",
+          "status": "CONFIRMED",
+          "ptSessionState": "HELD",
+          "slotId": "f59e6d3c-a4b3-4445-b0bf-10ddfb673bb1",
+          "workDate": "2026-11-17",
+          "startTime": "2026-11-17T11:00:00.000Z",
+          "endTime": "2026-11-17T12:00:00.000Z",
+          "trainer": {
+            "id": "628bf0e7-3b53-47c2-bc7e-77dd6802b591",
+            "displayName": "HLV Kiểm Thử E53221",
+            "trainerCode": "PT0000000035"
+          },
+          "member": {
+            "id": "b12a64fa-f3bb-415b-80cf-e7bb1899c626",
+            "displayName": "Hội viên TC003B",
+            "memberCode": "HV080B32"
+          },
+          "cancelReason": null,
+          "cancelledAt": null,
+          "compensationGranted": false,
+          "createdAt": "2026-11-16T06:42:49.964Z"
+        },
+        "ptSessionOutcome": null,
+        "ptAvailable": 2
+      }
+    }
+  ],
+  "memberABalance": {
+    "memberCode": "HV08315D",
+    "beforeBook": 3,
+    "afterBook": 3
+  },
+  "memberBBalance": {
+    "memberCode": "HV080B32",
+    "beforeBook": 3,
+    "afterBook": 2
+  },
+  "persistedAppointmentsCount": 1,
+  "persistedAppointmentCode": "LH000024"
+}
