@@ -1,0 +1,20 @@
+{
+  "caseId": "TC-UC08-002",
+  "commit": "3b28ead",
+  "memberCode": "HV08487E",
+  "slotId": "0c7a0734-2907-49b8-a023-e3109d9c8fe4",
+  "ptBalanceBefore": 0,
+  "ptBalanceAfter": 0,
+  "apiStatus": 400,
+  "apiError": {
+    "success": false,
+    "statusCode": 400,
+    "code": "INSUFFICIENT_PT_SESSIONS",
+    "message": "Bạn đã hết số buổi PT khả dụng. Vui lòng mua thêm gói PT.",
+    "timestamp": "2026-11-16T06:42:45.181Z",
+    "path": "/api/appointments"
+  },
+  "slotStatusBefore": "OPEN",
+  "slotStatusAfter": "OPEN",
+  "appointmentsCreatedOnSlot": 0
+}

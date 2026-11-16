@@ -1,0 +1,12 @@
+{
+  "caseId": "TC-UC08-009",
+  "commit": "3b28ead",
+  "actor": "admin@fithub.vn",
+  "appointmentCode": "LH999A6B",
+  "beforeBook": 2,
+  "afterBook": 1,
+  "afterNoShow": 1,
+  "status": "NO_SHOW",
+  "ptSessionState": "CONSUMED",
+  "verifiedById": "b080a5d2-64a9-43d2-8766-653f04deda0f"
+}
