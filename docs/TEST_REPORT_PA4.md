@@ -1,8 +1,8 @@
 # Báo cáo kiểm thử PA4 — FitHub (Nhóm 13)
 
 - **Người lập:** Nguyễn Trần Minh Trí (`24120461`) — Jira `SCRUM-108`
-- **Ngày chạy:** 15/11/2026
-- **Cây mã nguồn:** `origin/main` tại commit `a60269a` (sau PR #16 — UC08), cộng các thay đổi của nhánh `test/scrum-108-tri-qa` nêu ở mục 5.
+- **Ngày chạy:** 18/11/2026 (chạy lại; lần đầu 15/11/2026 trên `a60269a`)
+- **Cây mã nguồn:** `origin/main` tại commit `3b28ead` (sau PR #18 — UC08 bản hoàn thiện), cộng các thay đổi của nhánh `test/scrum-108-tri-qa` nêu ở mục 5.
 - **Nguyên tắc:** chỉ ghi PASS cho những gì đã chạy thật. Ca nào fail thì ghi fail kèm nguyên nhân.
 
 ---
@@ -23,13 +23,15 @@
 | :--- | :---: | :--- |
 | `npm run typecheck` | **PASS** | 4 workspace (contracts, api, web, mobile) |
 | `npm run build` | **PASS** | contracts, api, web (Vite chỉ cảnh báo chunk > 500 kB) |
-| `npm run db:test` (= `npm test`) | **126/127 PASS** | Node Test Runner + Supertest, 18 file; 1 fail ở `sales.test.ts` (lỗi #2, mục 4) |
+| `npm run db:test` (= `npm test`) | **128/129 PASS** | Node Test Runner + Supertest, 18 file; 1 fail ở `sales.test.ts` (lỗi #2, mục 4) |
 | Test UC15 chạy riêng (`uc15-payments.test.ts`, `vnpay.crypto.test.ts`) | **23/23 PASS** | Cần API chạy ở cổng 3101 với `VNPAY_MODE=SIMULATED`; chưa nằm trong `db:test` (lỗi #3) |
 | `npm run test:unit -w @fithub/mobile` | **5/5 PASS** | `api-host.test.ts` |
-| `npm run test:e2e` (web) | **32/33 PASS** | 1 ca camera check-in chập chờn; chạy lại 3 lần đều PASS (lỗi #5) |
+| `npm run test:e2e` (web) | **33/33 PASS** | Ca camera check-in từng chập chờn (lỗi #5) lần này PASS ngay lượt đầu |
 | `npm run test:mobile` | **11/13 PASS** | 2 ca `auth.spec.ts` fail do test cũ (lỗi #4) |
 
-Tổng cộng: **197/201 ca tự động PASS** (127 + 23 + 5 + 33 + 13). Cả 4 ca fail đều do test cũ hoặc chập chờn, không phải lỗi nghiệp vụ; chi tiết ở mục 4.
+Tổng cộng: **200/203 ca tự động PASS** (129 + 23 + 5 + 33 + 13). Cả 3 ca fail đều do test cũ chưa cập nhật, không phải lỗi nghiệp vụ; chi tiết ở mục 4.
+
+So với lần chạy 15/11 trên `a60269a` (197/201): PR #18 thêm 2 ca UC08 vào `pt-bookings.test.ts` (đều PASS), và web E2E hết lỗi trắng trang nhờ bản sửa trên `main`.
 
 ## 3. Kết quả theo từng Use Case
 
@@ -44,7 +46,7 @@ Danh sách 12 Use Case lấy từ `src/docs/TIEN_DO_CHUC_NANG.md`. Jira ghi "13 
 | UC05 | Quản lý gói tập | Hợp | 7/7 PASS (`packages-memberships`) | Chưa có E2E | **PASS** (backend) |
 | UC06 | Hồ sơ chuyên môn PT | Liệu | 4/4 PASS (`trainers`, `trainers.service.spec`) | Web `trainers.spec` 1/1, mobile 1/1 | **PASS** |
 | UC07 | Lịch làm việc PT | Liệu | 5/5 PASS (`working-slots`, `trainers.service.spec`) | Web `trainer-schedule.spec` 1/1 | **PASS** |
-| UC08 | Đặt lịch hẹn PT 1-1 | Quang | 12/12 PASS (`pt-bookings-rules`, `pt-bookings`) | Chưa có E2E; trang web crash khi chưa đăng nhập đã được sửa (lỗi #1) | **PASS** (backend) |
+| UC08 | Đặt lịch hẹn PT 1-1 | Quang | 14/14 PASS (`pt-bookings-rules`, `pt-bookings`; gồm 2 ca mới của PR #18: xem trước đặt lịch chỉ đọc, 3 khung giờ trống gần nhất) | Chưa có E2E trên `main`; lỗi trắng trang đã sửa (lỗi #1) | **PASS** (backend) |
 | UC10 | Quản lý thiết bị | Hợp | 5/5 PASS (`equipments`) | Chưa có E2E | **PASS** (backend) |
 | UC13 | Ghi nhật ký tập luyện | Trí | 12/12 PASS (9 tích hợp + 3 unit) | Mobile `workout-log.spec` 1/1 | **PASS** |
 | UC15 | Thanh toán gói tập | Quang | 23/23 PASS (chạy riêng) + `sales` 8/9 | Web `sales.spec` 2/2 | **PASS**, 1 test `sales` cũ (lỗi #2) |
@@ -104,8 +106,8 @@ File `src/backend/src/workouts/__tests__/workouts.service.spec.ts`, chạy trong
 | 2 | `sales.test.ts` "DB sales 05": xác nhận hóa đơn đã hủy nay trả `PAYMENT_ALREADY_PROCESSED` thay vì `PAYMENT_CANCELLED`. Hóa đơn vẫn bị chặn đúng; test UC15 mới cũng dùng mã `PAYMENT_ALREADY_PROCESSED`, nên đây là test cũ chưa cập nhật. | UC15, commit `3aae5dc` | Chỉ test | Mở — Quang cập nhật test |
 | 3 | `uc15-payments.test.ts` và `vnpay.crypto.test.ts` chưa được thêm vào `scripts/test-database.mjs`, và test tích hợp cần một API chạy sẵn ở cổng 3101, nên `npm test` không kiểm UC15. | UC15 | Quy trình test | Mở — Quang đưa vào `db:test` |
 | 4 | Mobile `auth.spec.ts:64` và `:207` tìm chữ `HI VIÊN MOBILE` / `HI HOÀNG NAM`, đã đổi sau khi thiết kế lại Home. | UC01/UC02 | Chỉ test | Mở — Quyền cập nhật test |
-| 5 | Web `check-in.spec.ts:127` (camera) fail một lần ở lượt chạy đầu, chạy lại 3 lần đều PASS. | UC03 | Ca chập chờn | Theo dõi |
-| 6 | UC05, UC08, UC10 chưa có E2E web; UC15 VNPay chỉ kiểm ở chế độ `SIMULATED`. | — | Độ phủ | Mở |
+| 5 | Web `check-in.spec.ts:127` (camera) fail một lần ở lượt chạy 15/11, chạy lại 3 lần đều PASS; lượt 18/11 PASS ngay. | UC03 | Ca chập chờn | Theo dõi |
+| 6 | UC05, UC08, UC10 chưa có E2E web trên `main`; UC15 VNPay chỉ kiểm ở chế độ `SIMULATED`. Đã có nhánh đang làm nhưng chưa merge nên chưa tính vào báo cáo: `test/scrum-111-hop-uc08-qa` (E2E + bằng chứng UC08) và `test/uc05-quang` (fixture + bằng chứng UC05). | — | Độ phủ | Mở |
 
 Hạn chế khác:
 - Nhánh `feature/uc05-hop-packages` còn 1 commit chưa merge, sửa migration `202611130001_uc05_freeze_lifecycle_fix` khác `main` khoảng 10 dòng. Báo cáo chạy theo bản trên `main`.
