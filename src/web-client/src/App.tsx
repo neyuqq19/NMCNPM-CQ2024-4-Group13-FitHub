@@ -373,7 +373,13 @@ export function App() {
           />
           <Route
             path="pt-bookings"
-            element={user ? <PtBookingsPage role={user.role} /> : null}
+            element={
+              user ? (
+                <PtBookingsPage role={user.role} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
           />
           <Route path="trainers" element={<TrainerList />} />
           <Route path="trainers/:id" element={<TrainerDetail />} />

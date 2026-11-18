@@ -20,14 +20,21 @@ const statusLabel: Record<AppointmentStatus, string> = {
   NO_SHOW: "Vắng mặt",
   COMPLETED: "Đã hoàn thành",
 };
-const statusTone: Record<AppointmentStatus, "success" | "warning" | "neutral" | "danger"> = {
+const statusTone: Record<
+  AppointmentStatus,
+  "success" | "warning" | "neutral" | "danger"
+> = {
   CONFIRMED: "success",
   CANCELLED_BY_MEMBER: "neutral",
   CANCELLED_BY_PT: "warning",
   NO_SHOW: "danger",
   COMPLETED: "neutral",
 };
-const sessionLabel = { HELD: "Đang giữ", CONSUMED: "Đã trừ", REFUNDED: "Đã hoàn" } as const;
+const sessionLabel = {
+  HELD: "Đang giữ",
+  CONSUMED: "Đã trừ",
+  REFUNDED: "Đã hoàn",
+} as const;
 const outcomeText: Record<PtSessionOutcome, string> = {
   REFUND: "Đã hoàn lại 1 buổi PT cho hội viên.",
   CONSUME: "Đã trừ 1 buổi PT của hội viên.",
@@ -57,8 +64,12 @@ export function PtBookingsPage({ role }: { role: Role }) {
   if (from) query.set("from", from);
   if (to) query.set("to", to);
   const qs = query.toString();
-  const { data, error, loading, reload } = useResource(`pt-bookings:${qs}`, () =>
-    fetchFromApi<AppointmentPageDto>(`/api/appointments${qs ? `?${qs}` : ""}`),
+  const { data, error, loading, reload } = useResource(
+    `pt-bookings:${qs}`,
+    () =>
+      fetchFromApi<AppointmentPageDto>(
+        `/api/appointments${qs ? `?${qs}` : ""}`,
+      ),
   );
   const [cancelling, setCancelling] = useState<AppointmentDto | null>(null);
   const [reason, setReason] = useState("");
@@ -104,7 +115,11 @@ export function PtBookingsPage({ role }: { role: Role }) {
             : "Quản lý lịch hẹn 1-1, xử lý hủy lịch và xác minh hội viên vắng mặt."
         }
         action={
-          <button className="button outline" disabled={loading} onClick={reload}>
+          <button
+            className="button outline"
+            disabled={loading}
+            onClick={reload}
+          >
             Làm mới
           </button>
         }
@@ -112,7 +127,11 @@ export function PtBookingsPage({ role }: { role: Role }) {
       {message && <Notice>{message}</Notice>}
       {failure && <Notice error>{failure}</Notice>}
       <div className="search-bar pt-filters">
-        <select aria-label="Trạng thái lịch hẹn" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select
+          aria-label="Trạng thái lịch hẹn"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
           <option value="">Tất cả trạng thái</option>
           {(Object.keys(statusLabel) as AppointmentStatus[]).map((s) => (
             <option key={s} value={s}>
@@ -121,10 +140,20 @@ export function PtBookingsPage({ role }: { role: Role }) {
           ))}
         </select>
         <label>
-          Từ ngày <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          Từ ngày{" "}
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
         </label>
         <label>
-          Đến ngày <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          Đến ngày{" "}
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
         </label>
       </div>
       <section className="panel">
@@ -157,32 +186,49 @@ export function PtBookingsPage({ role }: { role: Role }) {
                     <tr key={a.id}>
                       <td>{a.code}</td>
                       <td>
-                        {a.member.displayName} <small>({a.member.memberCode})</small>
+                        {a.member.displayName}{" "}
+                        <small>({a.member.memberCode})</small>
                       </td>
                       <td>{a.trainer.displayName}</td>
                       <td>{day(a.workDate)}</td>
                       <td>{range(a)}</td>
                       <td>
-                        <Badge tone={statusTone[a.status]}>{statusLabel[a.status]}</Badge>
-                        {a.compensationGranted && <small className="pt-note"> · đã đền bù +1 buổi</small>}
+                        <Badge tone={statusTone[a.status]}>
+                          {statusLabel[a.status]}
+                        </Badge>
+                        {a.compensationGranted && (
+                          <small className="pt-note pt-compensation">
+                            Đã đền bù thêm 1 buổi
+                          </small>
+                        )}
                       </td>
                       <td>{sessionLabel[a.ptSessionState]}</td>
-                      <td className="pt-actions">
-                        {confirmed && !started && (
-                          <button className="button outline" disabled={busy} onClick={() => setCancelling(a)}>
-                            PT hủy lịch
-                          </button>
-                        )}
-                        {confirmed && ended && role === "ADMIN" && (
-                          <button
-                            className="button outline"
-                            disabled={busy}
-                            onClick={() => run(`/api/appointments/${a.id}/verify-no-show`)}
-                          >
-                            Xác minh vắng mặt (NO_SHOW)
-                          </button>
-                        )}
-                        {a.cancelReason && !confirmed && <small>{a.cancelReason}</small>}
+                      <td>
+                        <div className="pt-actions">
+                          {confirmed && !started && (
+                            <button
+                              className="button outline"
+                              disabled={busy}
+                              onClick={() => setCancelling(a)}
+                            >
+                              PT hủy lịch
+                            </button>
+                          )}
+                          {confirmed && ended && role === "ADMIN" && (
+                            <button
+                              className="button outline"
+                              disabled={busy}
+                              onClick={() =>
+                                run(`/api/appointments/${a.id}/verify-no-show`)
+                              }
+                            >
+                              Xác minh vắng mặt (NO_SHOW)
+                            </button>
+                          )}
+                          {a.cancelReason && !confirmed && (
+                            <small>{a.cancelReason}</small>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -191,12 +237,20 @@ export function PtBookingsPage({ role }: { role: Role }) {
             </table>
           </div>
         ) : (
-          <Empty title="Chưa có lịch hẹn" description="Không có lịch hẹn nào khớp bộ lọc hiện tại." />
+          <Empty
+            title="Chưa có lịch hẹn"
+            description="Không có lịch hẹn nào khớp bộ lọc hiện tại."
+          />
         )}
       </section>
       {cancelling && (
         <div className="pt-modal-backdrop">
-          <div className="panel pt-modal" role="dialog" aria-modal="true" aria-labelledby="pt-cancel-title">
+          <div
+            className="panel pt-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pt-cancel-title"
+          >
             <h2 id="pt-cancel-title">
               Hủy lịch {cancelling.code} · {cancelling.member.displayName}
             </h2>
@@ -205,7 +259,8 @@ export function PtBookingsPage({ role }: { role: Role }) {
             </p>
             {hoursLeft < PT_COMPENSATION_HOURS ? (
               <Notice error>
-                Hủy lịch sát giờ (&lt; 6 tiếng): hội viên sẽ được hoàn lại buổi tập và được cộng đền bù thêm +1 buổi PT.
+                Hủy lịch sát giờ (&lt; 6 tiếng): hội viên sẽ được hoàn lại buổi
+                tập và được cộng đền bù thêm +1 buổi PT.
               </Notice>
             ) : (
               <Notice>Hội viên sẽ được hoàn lại 1 buổi PT.</Notice>
@@ -220,13 +275,21 @@ export function PtBookingsPage({ role }: { role: Role }) {
               />
             </label>
             <div className="pt-modal-actions">
-              <button className="button outline" disabled={busy} onClick={() => setCancelling(null)}>
+              <button
+                className="button outline"
+                disabled={busy}
+                onClick={() => setCancelling(null)}
+              >
                 Đóng
               </button>
               <button
                 className="button primary"
                 disabled={busy || !reason.trim()}
-                onClick={() => run(`/api/appointments/${cancelling.id}/cancel-by-pt`, { reason: reason.trim() })}
+                onClick={() =>
+                  run(`/api/appointments/${cancelling.id}/cancel-by-pt`, {
+                    reason: reason.trim(),
+                  })
+                }
               >
                 Xác nhận hủy lịch
               </button>

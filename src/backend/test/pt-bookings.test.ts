@@ -13,7 +13,10 @@ import { PtBookingsService } from "../src/modules/pt-bookings/pt-bookings.servic
 
 for (const value of [process.env.DATABASE_URL, process.env.DIRECT_URL]) {
   const u = new URL(value || "postgresql://invalid/invalid");
-  if (!["localhost", "127.0.0.1"].includes(u.hostname) || u.pathname != "/fithub_test")
+  if (
+    !["localhost", "127.0.0.1"].includes(u.hostname) ||
+    u.pathname != "/fithub_test"
+  )
     throw Error("UC08 tests require isolated fithub_test.");
 }
 const db = new PrismaClient();
@@ -104,7 +107,9 @@ async function makeMember(pt: number) {
 let dayCounter = 0;
 // Ca 60 phút trong tương lai xa, giờ bắt đầu cố định để tính mốc 12h/6h chính xác.
 async function makeSlot(trainerId: string, time = "09:00") {
-  const date = new Date(Date.UTC(2030, 4, 1 + dayCounter++)).toISOString().slice(0, 10);
+  const date = new Date(Date.UTC(2030, 4, 1 + dayCounter++))
+    .toISOString()
+    .slice(0, 10);
   const startTime = new Date(`${date}T${time}:00+07:00`);
   return db.workingSlot.create({
     data: {
@@ -116,7 +121,8 @@ async function makeSlot(trainerId: string, time = "09:00") {
   });
 }
 const remaining = async (membershipId: string) =>
-  (await db.membership.findUniqueOrThrow({ where: { id: membershipId } })).ptSessionsRemaining;
+  (await db.membership.findUniqueOrThrow({ where: { id: membershipId } }))
+    .ptSessionsRemaining;
 const book = (token: string, slotId: string) =>
   api.post("/api/appointments").set(auth(token)).send({ slotId });
 // Đặt lịch với giờ thật rồi giả lập "bây giờ" khi hủy.
@@ -137,7 +143,12 @@ before(async () => {
   api = request(app.getHttpServer());
   service = app.get(PtBookingsService);
   pack = await db.package.create({
-    data: { code: `UC08-${randomUUID().slice(0, 8)}`, name: "Gói UC08", durationMonths: 1, price: 100000 },
+    data: {
+      code: `UC08-${randomUUID().slice(0, 8)}`,
+      name: "Gói UC08",
+      durationMonths: 1,
+      price: 100000,
+    },
   });
   admin = await makeUser("ADMIN");
 });
@@ -160,11 +171,17 @@ test("APT-01: đặt lịch giữ 1 buổi PT, đóng ca và hẹn nhắc lịch
   assert.equal(res.body.appointment.ptSessionState, "HELD");
   assert.equal(res.body.ptAvailable, 1);
   assert.equal(await remaining(m.membershipId), 1);
-  const after = await db.workingSlot.findUniqueOrThrow({ where: { id: slot.id } });
+  const after = await db.workingSlot.findUniqueOrThrow({
+    where: { id: slot.id },
+  });
   assert.equal(after.status, "BOOKED");
   assert.equal(after.memberId, m.profileId);
   const reminders = await db.reminder.count({
-    where: { sourceType: "APPOINTMENT", sourceId: res.body.appointment.id, status: "PENDING" },
+    where: {
+      sourceType: "APPOINTMENT",
+      sourceId: res.body.appointment.id,
+      status: "PENDING",
+    },
   });
   assert.ok(reminders >= 2, "24h/2h reminders scheduled");
 
@@ -172,7 +189,10 @@ test("APT-01: đặt lịch giữ 1 buổi PT, đóng ca và hẹn nhắc lịch
   assert.equal(mine.status, 200);
   assert.equal(mine.body.items.length, 1);
   assert.equal(mine.body.ptAvailable, 1);
-  assert.equal((await api.post("/api/appointments").send({ slotId: slot.id })).status, 401);
+  assert.equal(
+    (await api.post("/api/appointments").send({ slotId: slot.id })).status,
+    401,
+  );
   assert.equal((await book(pt.token, slot.id)).status, 403);
 });
 
@@ -183,7 +203,10 @@ test("BR01: hết buổi PT thì bị chặn 400, còn đúng 1 buổi thì đ�
   const res = await book(none.token, (await makeSlot(pt.profileId)).id);
   assert.equal(res.status, 400);
   assert.equal(res.body.code, "INSUFFICIENT_PT_SESSIONS");
-  assert.equal((await book(one.token, (await makeSlot(pt.profileId, "11:00")).id)).status, 201);
+  assert.equal(
+    (await book(one.token, (await makeSlot(pt.profileId, "11:00")).id)).status,
+    201,
+  );
   assert.equal(await remaining(one.membershipId), 0);
 });
 
@@ -192,7 +215,10 @@ test("SR02/E1: hai hội viên cùng đặt một ca đồng thời, chỉ một
   const a = await makeMember(3);
   const b = await makeMember(3);
   const slot = await makeSlot(pt.profileId);
-  const [x, y] = await Promise.all([book(a.token, slot.id), book(b.token, slot.id)]);
+  const [x, y] = await Promise.all([
+    book(a.token, slot.id),
+    book(b.token, slot.id),
+  ]);
   assert.deepEqual([x.status, y.status].sort(), [201, 409]);
   const loser = x.status === 409 ? x : y;
   assert.equal(loser.body.code, "SLOT_ALREADY_BOOKED");
@@ -233,14 +259,18 @@ test("APT-03: hội viên hủy, mốc 12h00 hoàn buổi, 11h59 trừ hẳn bu�
   assert.equal(await remaining(m.membershipId), 1);
   try {
     clockAt(s1.startTime, 12 * HOUR);
-    const early = await api.post(`/api/appointments/${a1}/cancel-by-member`).set(auth(m.token));
+    const early = await api
+      .post(`/api/appointments/${a1}/cancel-by-member`)
+      .set(auth(m.token));
     assert.equal(early.status, 200, JSON.stringify(early.body));
     assert.equal(early.body.ptSessionOutcome, "REFUND");
     assert.equal(early.body.appointment.ptSessionState, "REFUNDED");
     assert.equal(await remaining(m.membershipId), 2);
 
     clockAt(s2.startTime, 12 * HOUR - MIN);
-    const late = await api.post(`/api/appointments/${a2}/cancel-by-member`).set(auth(m.token));
+    const late = await api
+      .post(`/api/appointments/${a2}/cancel-by-member`)
+      .set(auth(m.token));
     assert.equal(late.status, 200);
     assert.equal(late.body.ptSessionOutcome, "CONSUME");
     assert.equal(late.body.appointment.ptSessionState, "CONSUMED");
@@ -254,13 +284,37 @@ test("APT-03: hội viên hủy, mốc 12h00 hoàn buổi, 11h59 trừ hẳn bu�
     assert.equal(row.memberId, null);
   }
   for (const id of [a1, a2])
-    assert.equal(await db.reminder.count({ where: { sourceId: id, status: "PENDING" } }), 0);
+    assert.equal(
+      await db.reminder.count({ where: { sourceId: id, status: "PENDING" } }),
+      0,
+    );
   // Hủy lần hai và hủy lịch của người khác đều bị chặn.
-  assert.equal((await api.post(`/api/appointments/${a1}/cancel-by-member`).set(auth(m.token))).status, 409);
+  assert.equal(
+    (
+      await api
+        .post(`/api/appointments/${a1}/cancel-by-member`)
+        .set(auth(m.token))
+    ).status,
+    409,
+  );
   const other = await makeMember(1);
   const a3 = await bookedAppointment(m, (await makeSlot(pt.profileId)).id);
-  assert.equal((await api.post(`/api/appointments/${a3}/cancel-by-member`).set(auth(other.token))).status, 403);
-  assert.equal((await api.post(`/api/appointments/${randomUUID()}/cancel-by-member`).set(auth(m.token))).status, 404);
+  assert.equal(
+    (
+      await api
+        .post(`/api/appointments/${a3}/cancel-by-member`)
+        .set(auth(other.token))
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await api
+        .post(`/api/appointments/${randomUUID()}/cancel-by-member`)
+        .set(auth(m.token))
+    ).status,
+    404,
+  );
 });
 
 test("APT-04: PT hủy, mốc 6h00 chỉ hoàn, 5h59 hoàn và đền bù +1 buổi", async () => {
@@ -273,7 +327,10 @@ test("APT-04: PT hủy, mốc 6h00 chỉ hoàn, 5h59 hoàn và đền bù +1 bu�
   const a2 = await bookedAppointment(m, s2.id);
   assert.equal(await remaining(m.membershipId), 0);
 
-  const noReason = await api.post(`/api/appointments/${a1}/cancel-by-pt`).set(auth(pt.token)).send({});
+  const noReason = await api
+    .post(`/api/appointments/${a1}/cancel-by-pt`)
+    .set(auth(pt.token))
+    .send({});
   assert.equal(noReason.status, 400);
   assert.equal(noReason.body.code, "REASON_REQUIRED");
   const notMine = await api
@@ -281,18 +338,32 @@ test("APT-04: PT hủy, mốc 6h00 chỉ hoàn, 5h59 hoàn và đền bù +1 bu�
     .set(auth(stranger.token))
     .send({ reason: "x" });
   assert.equal(notMine.status, 403);
-  assert.equal((await api.post(`/api/appointments/${a1}/cancel-by-pt`).set(auth(m.token)).send({ reason: "x" })).status, 403);
+  assert.equal(
+    (
+      await api
+        .post(`/api/appointments/${a1}/cancel-by-pt`)
+        .set(auth(m.token))
+        .send({ reason: "x" })
+    ).status,
+    403,
+  );
 
   try {
     clockAt(s1.startTime, 6 * HOUR);
-    const early = await api.post(`/api/appointments/${a1}/cancel-by-pt`).set(auth(pt.token)).send({ reason: "Ốm" });
+    const early = await api
+      .post(`/api/appointments/${a1}/cancel-by-pt`)
+      .set(auth(pt.token))
+      .send({ reason: "Ốm" });
     assert.equal(early.status, 200, JSON.stringify(early.body));
     assert.equal(early.body.ptSessionOutcome, "REFUND");
     assert.equal(early.body.appointment.compensationGranted, false);
     assert.equal(await remaining(m.membershipId), 1);
 
     clockAt(s2.startTime, 6 * HOUR - MIN);
-    const late = await api.post(`/api/appointments/${a2}/cancel-by-pt`).set(auth(pt.token)).send({ reason: "Việc gia đình" });
+    const late = await api
+      .post(`/api/appointments/${a2}/cancel-by-pt`)
+      .set(auth(pt.token))
+      .send({ reason: "Việc gia đình" });
     assert.equal(late.status, 200);
     assert.equal(late.body.ptSessionOutcome, "REFUND_WITH_COMPENSATION");
     assert.equal(late.body.appointment.compensationGranted, true);
@@ -300,11 +371,16 @@ test("APT-04: PT hủy, mốc 6h00 chỉ hoàn, 5h59 hoàn và đền bù +1 bu�
     service.now = realNow;
   }
   // 0 -> +1 (hoàn ca 1) -> +2 (hoàn ca 2 và đền bù) = 3 buổi, nhiều hơn gói gốc 2 buổi.
-  const m2 = await db.membership.findUniqueOrThrow({ where: { id: m.membershipId } });
+  const m2 = await db.membership.findUniqueOrThrow({
+    where: { id: m.membershipId },
+  });
   assert.equal(m2.ptSessionsRemaining, 3);
   assert.equal(m2.ptSessionsSnapshot, 3);
   // PT báo không đứng lớp nên ca không mở lại cho người khác đặt.
-  assert.equal((await db.workingSlot.findUniqueOrThrow({ where: { id: s2.id } })).status, "UNAVAILABLE");
+  assert.equal(
+    (await db.workingSlot.findUniqueOrThrow({ where: { id: s2.id } })).status,
+    "UNAVAILABLE",
+  );
 });
 
 test("APT-05: chỉ ADMIN xác minh NO_SHOW và chỉ sau khi ca kết thúc", async () => {
@@ -330,7 +406,12 @@ test("APT-05: chỉ ADMIN xác minh NO_SHOW và chỉ sau khi ca kết thúc", a
     service.now = realNow;
   }
   assert.equal(await remaining(m.membershipId), 0);
-  assert.equal(await db.auditLog.count({ where: { entityId: id, action: "VERIFY_NO_SHOW" } }), 1);
+  assert.equal(
+    await db.auditLog.count({
+      where: { entityId: id, action: "VERIFY_NO_SHOW" },
+    }),
+    1,
+  );
 });
 
 test("APT-02: Admin lọc được toàn bộ, PT chỉ thấy lịch của mình, hội viên không vào được danh sách quản trị", async () => {
@@ -343,8 +424,75 @@ test("APT-02: Admin lọc được toàn bộ, PT chỉ thấy lịch của mìn
   assert.equal(mineAsPt.status, 200);
   assert.equal(mineAsPt.body.items.length, 1);
   assert.equal(mineAsPt.body.items[0].trainer.id, pt.profileId);
-  const all = await api.get(`/api/appointments?memberId=${m.profileId}&status=CONFIRMED`).set(auth(admin.token));
+  const all = await api
+    .get(`/api/appointments?memberId=${m.profileId}&status=CONFIRMED`)
+    .set(auth(admin.token));
   assert.equal(all.body.items.length, 2);
-  assert.equal((await api.get("/api/appointments?status=NOPE").set(auth(admin.token))).status, 400);
-  assert.equal((await api.get("/api/appointments").set(auth(m.token))).status, 403);
+  assert.equal(
+    (await api.get("/api/appointments?status=NOPE").set(auth(admin.token)))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await api.get("/api/appointments").set(auth(m.token))).status,
+    403,
+  );
+});
+
+test("booking preview is read-only, private and rejects exhausted or taken slots", async () => {
+  service.now = realNow;
+  const pt = await makeTrainer();
+  const m = await makeMember(2);
+  const empty = await makeMember(0);
+  const slot = await makeSlot(pt.profileId);
+  const url = `/api/appointments/booking-preview?slotId=${slot.id}`;
+  await api.get(url).expect(401);
+  await api.get(url).set(auth(pt.token)).expect(403);
+  const preview = (await api.get(url).set(auth(m.token)).expect(200)).body;
+  assert.equal(preview.membership.id, m.membershipId);
+  assert.equal(preview.membership.ptSessionsRemaining, 2);
+  assert.equal(await remaining(m.membershipId), 2);
+  assert.equal(await db.appointment.count({ where: { slotId: slot.id } }), 0);
+  assert.equal(
+    (await api.get(url).set(auth(empty.token)).expect(400)).body.code,
+    "INSUFFICIENT_PT_SESSIONS",
+  );
+  await book(m.token, slot.id).expect(201);
+  assert.equal(
+    (await api.get(url).set(auth(empty.token)).expect(409)).body.code,
+    "SLOT_UNAVAILABLE",
+  );
+});
+
+test("trainer cards expose only the three nearest future open slots and hide slots on leave", async () => {
+  service.now = realNow;
+  const pt = await makeTrainer();
+  await db.trainerProfile.update({
+    where: { id: pt.profileId },
+    data: {
+      bio: "Hướng dẫn sức mạnh và phục hồi cho hội viên.",
+      specialties: ["Tăng cơ"],
+    },
+  });
+  const slots = [];
+  for (let i = 0; i < 5; i++) slots.push(await makeSlot(pt.profileId));
+  await db.workingSlot.update({
+    where: { id: slots[0].id },
+    data: { status: "UNAVAILABLE", unavailableReason: "private reason" },
+  });
+  const list = async () =>
+    (
+      await api.get("/api/trainers").set(auth(admin.token)).expect(200)
+    ).body.items.find((t: { id: string }) => t.id === pt.profileId);
+  const card = await list();
+  assert.deepEqual(
+    card.nextAvailableSlots.map((s: { id: string }) => s.id),
+    slots.slice(1, 4).map((s) => s.id),
+  );
+  assert.equal(JSON.stringify(card).includes("private reason"), false);
+  await db.trainerProfile.update({
+    where: { id: pt.profileId },
+    data: { workStatus: "ON_LEAVE" },
+  });
+  assert.deepEqual((await list()).nextAvailableSlots, []);
 });

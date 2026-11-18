@@ -100,7 +100,7 @@ File `src/backend/src/workouts/__tests__/workouts.service.spec.ts`, chạy trong
 
 | # | Lỗi | Thuộc | Ảnh hưởng | Trạng thái |
 | :-: | :--- | :--- | :--- | :--- |
-| 1 | Web Admin trắng trang khi chưa đăng nhập: `App.tsx` đọc `user!.role` cho route `pt-bookings` ngay cả khi `user = null` (`Cannot read properties of null (reading 'role')`). Lần chạy đầu cả 33 ca E2E web đều fail vì lỗi này. | UC08, commit `67b482c` | Toàn bộ web | **Đã sửa** trên nhánh QA (mục 5), cần Quang xem lại |
+| 1 | Web Admin trắng trang khi chưa đăng nhập: `App.tsx` đọc `user!.role` cho route `pt-bookings` ngay cả khi `user = null` (`Cannot read properties of null (reading 'role')`). Lần chạy đầu cả 33 ca E2E web đều fail vì lỗi này. | UC08, commit `67b482c` | Toàn bộ web | **Đã sửa** trên `main` (commit `ab9ad8a`, PR #18: chưa đăng nhập thì chuyển về `/login`) |
 | 2 | `sales.test.ts` "DB sales 05": xác nhận hóa đơn đã hủy nay trả `PAYMENT_ALREADY_PROCESSED` thay vì `PAYMENT_CANCELLED`. Hóa đơn vẫn bị chặn đúng; test UC15 mới cũng dùng mã `PAYMENT_ALREADY_PROCESSED`, nên đây là test cũ chưa cập nhật. | UC15, commit `3aae5dc` | Chỉ test | Mở — Quang cập nhật test |
 | 3 | `uc15-payments.test.ts` và `vnpay.crypto.test.ts` chưa được thêm vào `scripts/test-database.mjs`, và test tích hợp cần một API chạy sẵn ở cổng 3101, nên `npm test` không kiểm UC15. | UC15 | Quy trình test | Mở — Quang đưa vào `db:test` |
 | 4 | Mobile `auth.spec.ts:64` và `:207` tìm chữ `HI VIÊN MOBILE` / `HI HOÀNG NAM`, đã đổi sau khi thiết kế lại Home. | UC01/UC02 | Chỉ test | Mở — Quyền cập nhật test |
@@ -118,7 +118,7 @@ Hạn chế khác:
 | `src/backend/src/workouts/__tests__/workouts.service.spec.ts` | Mới: 5 unit test (mục 3.1) |
 | `src/scripts/test-database.mjs` | Thêm file unit test trên vào `db:test` |
 | `src/backend/test/notifications.test.ts` | Sửa fixture UC16: từ khi UC08 thêm bảng `Appointment`, các `appointmentId` ngẫu nhiên bị coi là đã hủy nên 2 ca NTF-04/NTF-05 fail. Test UC16 nay giả lập nguồn lịch hẹn luôn `CONFIRMED` (ca BR03 vẫn tự đổi sang "đã hủy"); tích hợp thật với UC08 do test `pt-bookings` kiểm. |
-| `src/web-client/src/App.tsx` | Sửa lỗi #1: chỉ render `PtBookingsPage` khi đã có `user` |
+| `src/web-client/src/App.tsx` | Không còn thay đổi: lỗi #1 đã được sửa trên `main` bằng PR #18, nhánh QA dùng bản đó khi merge |
 
 ## 6. Cách chạy lại
 
