@@ -413,9 +413,19 @@ export class AuthService {
       allowedHoursLabel:
         effectiveState === "ACTIVE"
           ? latest.accessWindowSnapshot === "OFF_PEAK"
-            ? "Thấp điểm · 09:00 – 16:00"
-            : "Toàn khung giờ · 05:30 – 22:00"
-          : `Đã kết thúc ngày ${formatDateVN(endsInclusiveDate)}`,
+            ? "Thấp điểm · 09:00 - 16:00"
+            : "Toàn khung giờ · 05:30 - 22:00"
+          : effectiveState === "PENDING_PAYMENT"
+            ? "Chưa kích hoạt · chờ xác nhận thanh toán"
+            : effectiveState === "SCHEDULED"
+              ? `Bắt đầu từ ngày ${formatDateVN(startsOn)}`
+              : effectiveState === "FROZEN"
+                ? "Gói tập đang được bảo lưu"
+                : effectiveState === "CANCELLED"
+                  ? "Gói tập đã bị hủy"
+                  : effectiveState === "EXPIRED"
+                    ? `Đã kết thúc ngày ${formatDateVN(endsInclusiveDate)}`
+                    : "Liên hệ quầy lễ tân để được hỗ trợ.",
     };
   }
 }

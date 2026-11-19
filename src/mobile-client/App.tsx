@@ -957,6 +957,11 @@ export default function App() {
                     .join("/")
                 : "—";
             const currentStatus = detailPkg?.status || summaryPkg?.state;
+
+            const isPendingPayment = currentStatus === "PENDING_PAYMENT";
+            const isActive = currentStatus === "ACTIVE";
+            const isFrozen = currentStatus === "FROZEN";
+            const isExpired = currentStatus === "EXPIRED";
             const pkgName =
               detailPkg?.packageName || summaryPkg?.packageName || "";
             const pkgCode =
@@ -987,9 +992,13 @@ export default function App() {
                       Trạng thái hội viên
                     </Text>
                     <Text style={styles.heroCardMainTitle}>
-                      {currentStatus === "ACTIVE"
-                        ? "Thông tin gia hạn gói"
-                        : "Gói tập đã hết hạn"}
+                      {isPendingPayment
+                        ? "Gói tập chờ thanh toán"
+                        : isActive
+                          ? "Thông tin gia hạn gói"
+                          : isFrozen
+                            ? "Gói tập đang bảo lưu"
+                            : "Gói tập đã hết hạn"}
                     </Text>
                     <Text style={[styles.heroCardMeta, { color: C.ink }]}>
                       {pkgName
@@ -1000,9 +1009,13 @@ export default function App() {
                       <BlackMetricPill
                         mainVal={endShort}
                         subVal={
-                          currentStatus === "ACTIVE"
-                            ? "NGÀY KẾT THÚC"
-                            : "ĐÃ KẾT THÚC"
+                          isPendingPayment
+                            ? "CHỜ THANH TOÁN"
+                            : isActive
+                              ? "NGÀY KẾT THÚC"
+                              : isFrozen
+                                ? "ĐANG BẢO LƯU"
+                                : "ĐÃ KẾT THÚC"
                         }
                         accentHex={C.coral}
                       />
