@@ -75,8 +75,9 @@ export function eligibleMembership(list: PurchasedMembership[], now: Date) {
   if (paid.length)
     return {
       code: "OUTSIDE_HOURS",
-      message:
-        "Ngoài giờ sử dụng gói tập. Giờ thường: 05:30–22:00; thấp điểm: 09:00–16:00.",
+      message: paid.some((m) => m.accessWindowSnapshot !== "OFF_PEAK")
+        ? "Hiện ngoài giờ vào tập. Gói của bạn cho phép check-in từ 05:30 đến trước 22:00 mỗi ngày (giờ Việt Nam)."
+        : "Hiện ngoài giờ vào tập. Gói thấp điểm của bạn cho phép check-in từ 09:00 đến trước 16:00 mỗi ngày (giờ Việt Nam).",
     };
   if (current.some((m) => effectiveMembershipStatus(m, day) === "FROZEN"))
     return { code: "MEMBERSHIP_FROZEN", message: "Gói tập đang bảo lưu." };

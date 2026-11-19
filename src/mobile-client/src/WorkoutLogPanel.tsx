@@ -1,3 +1,4 @@
+import { MobileBackHeader } from "./MobileBackHeader";
 // UC13 — Nhật ký tập luyện (WKO-01..05).
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -196,10 +197,12 @@ export function WorkoutLogPanel({
   baseUrl,
   session,
   onBack,
+  onNotifications,
 }: {
   baseUrl: string;
   session: MobileSession;
   onBack: () => void;
+  onNotifications?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("log");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -369,10 +372,8 @@ export function WorkoutLogPanel({
   return (
     <View style={s.root}>
       <ScrollView ref={scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+        <MobileBackHeader onBack={onBack} onNotifications={onNotifications} />
         <View style={s.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Quay lại trang chủ" style={s.back} onPress={onBack}>
-            <Feather name="chevron-left" size={24} color="white" />
-          </Pressable>
           <Text style={s.h1}>Nhật ký tập luyện</Text>
         </View>
 

@@ -71,7 +71,10 @@ export function flattenVnpQuery(
   }
   return out;
 }
-const safeLog = (v: unknown) => String(v ?? "").slice(0, 60).replace(/[^\w-]/g, "?");
+const safeLog = (v: unknown) =>
+  String(v ?? "")
+    .slice(0, 60)
+    .replace(/[^\w-]/g, "?");
 
 @Injectable()
 export class PaymentsService {
@@ -198,6 +201,7 @@ export class PaymentsService {
       amount,
       expiresAt: out.expiresAt.toISOString(),
       mode: this.vnpay.mode,
+      simulationAllowed: this.vnpay.simulationAllowed,
     };
   }
 
@@ -581,6 +585,67 @@ export class PaymentsService {
   }
 
   // ───────────────────────── Mobile: khoản của tôi ─────────────────────────
+  async getMine(user: CurrentUser, id: string): Promise<MyPaymentDto> {
+    if (user.role !== "MEMBER")
+      throw new ForbiddenException({
+        code: "ROLE_FORBIDDEN",
+        message: "Chỉ hội viên xem đơn của mình.",
+      });
+    return toMyPaymentDto(await this.loadAuthorized(user, id));
+  }
+
+  async cancelMine(user: CurrentUser, id: string): Promise<MyPaymentDto> {
+    if (user.role !== "MEMBER")
+      throw new ForbiddenException({
+        code: "ROLE_FORBIDDEN",
+        message: "Chỉ hội viên hủy đơn của mình.",
+      });
+    await this.db.$transaction(
+      async (tx) => {
+        const p = await lockPaymentChain(tx, id);
+        if (!p || p.membership.member.userId !== user.id) missing();
+        if (p.status === "CANCELLED") return;
+        if (
+          p.status === "CONFIRMED" ||
+          p.membership.status !== "PENDING_PAYMENT"
+        )
+          conflict(
+            "PAYMENT_ALREADY_PROCESSED",
+            "Đơn đã được xử lý, không thể hủy tại đây.",
+          );
+        if (
+          p.method === "VNPAY" &&
+          p.vnpExpiresAt &&
+          p.vnpExpiresAt > new Date() &&
+          p.status === "PENDING"
+        )
+          conflict(
+            "ONLINE_PAYMENT_IN_PROGRESS",
+            "Yêu cầu VNPay còn hiệu lực. Vui lòng chờ kết quả hoặc hết hạn trước khi hủy.",
+          );
+        await tx.payment.update({
+          where: { id },
+          data: { status: "CANCELLED" },
+        });
+        await tx.membership.update({
+          where: { id: p.membershipId },
+          data: { status: "CANCELLED", version: { increment: 1 } },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: user.id,
+            action: "MEMBER_CANCEL_PENDING_ORDER",
+            entityType: "Payment",
+            entityId: id,
+            changedFields: ["status", "membership.status"],
+          },
+        });
+      },
+      { timeout: 15000 },
+    );
+    return this.getMine(user, id);
+  }
+
   async myPayments(user: CurrentUser): Promise<MyPaymentDto[]> {
     if (user.role !== "MEMBER")
       throw new ForbiddenException({

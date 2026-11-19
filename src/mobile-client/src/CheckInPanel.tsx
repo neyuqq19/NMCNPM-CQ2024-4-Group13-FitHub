@@ -1,3 +1,4 @@
+import { MobileBackHeader } from "./MobileBackHeader";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,11 +26,13 @@ export function CheckInPanel({
   baseUrl,
   token,
   onHome,
+  onNotifications,
   onAccepted,
 }: {
   baseUrl: string;
   token: string;
   onHome: () => void;
+  onNotifications?: () => void;
   onAccepted: () => void;
 }) {
   const [qr, setQr] = useState<CheckInQrDto | null>(null);
@@ -138,6 +141,7 @@ export function CheckInPanel({
     : 0;
   return (
     <ScrollView style={s.root} contentContainerStyle={s.content}>
+      <MobileBackHeader onBack={onHome} onNotifications={onNotifications} />
       <Text accessibilityRole="header" style={s.title}>
         Thẻ vào phòng tập
       </Text>
@@ -217,9 +221,7 @@ export function CheckInPanel({
           )}
         </View>
       )}
-      <Pressable accessibilityRole="button" style={s.button} onPress={onHome}>
-        <Text style={s.buttonText}>Về trang chủ</Text>
-      </Pressable>
+
     </ScrollView>
   );
 }

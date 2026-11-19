@@ -1,3 +1,4 @@
+import { MobileBackHeader } from "./MobileBackHeader";
 import React, { useEffect, useRef, useState } from "react";
 import Feather from "@expo/vector-icons/Feather";
 import {
@@ -625,8 +626,9 @@ const normalize = (value: string) =>
     .toLocaleLowerCase("vi");
 export function PtBookingPanel({
   onBack,
+  onNotifications,
   ...connection
-}: Connection & { onBack: () => void }) {
+}: Connection & { onBack: () => void; onNotifications?: () => void }) {
   const [name, setName] = useState("");
   const [specialty, setSpecialty] = useState("");
   const [selected, setSelected] = useState<{ id: string; date?: string }>();
@@ -664,7 +666,7 @@ export function PtBookingPanel({
           />
         }
       >
-        <Action label="Về trang chủ" secondary onPress={onBack} />
+        <MobileBackHeader onBack={onBack} onNotifications={onNotifications} />
         <Text accessibilityRole="header" style={s.heading}>
           Huấn luyện viên
         </Text>

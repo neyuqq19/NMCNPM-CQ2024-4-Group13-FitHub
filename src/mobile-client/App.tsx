@@ -35,6 +35,9 @@ import type {
 import { clearSession, loadSession, saveSession } from "./src/session";
 import { HomePanel } from "./src/HomePanel";
 import { PtBookingPanel } from "./src/PtBookingPanel";
+import { PackagePurchasePanel } from "./src/PackagePurchasePanel";
+import { MobileBackHeader } from "./src/MobileBackHeader";
+import Svg, { Circle } from "react-native-svg";
 import { CheckInPanel } from "./src/CheckInPanel";
 import { AuthPanel } from "./src/AuthPanel";
 import { NotificationInboxPanel } from "./src/NotificationInboxPanel";
@@ -48,9 +51,11 @@ import type { MobileSession, ScreenId } from "./src/types";
 function FourDotsHeader({
   title,
   onPressDots,
+  dotsLabel = "Tùy chọn gói tập",
 }: {
   title: string;
   onPressDots?: () => void;
+  dotsLabel?: string;
 }) {
   return (
     <View style={styles.fourDotsHeader}>
@@ -58,6 +63,8 @@ function FourDotsHeader({
       {onPressDots ? (
         <Pressable
           style={styles.fourDotsBtn}
+          accessibilityRole="button"
+          accessibilityLabel={dotsLabel}
           onPress={onPressDots}
           hitSlop={10}
         >
@@ -606,6 +613,7 @@ export default function App() {
         )}
         {screen === "10_TRAINERS" && session && (
           <PtBookingPanel
+            onNotifications={() => setScreen("11_NOTIFICATIONS")}
             baseUrl={apiBaseUrl}
             token={session.accessToken}
             onBack={() => setScreen("01_HOME")}
@@ -659,10 +667,13 @@ export default function App() {
                   contentContainerStyle={styles.darkScrollContent}
                   showsVerticalScrollIndicator={false}
                 >
-                  <FourDotsHeader
-                    title="Gói tập của tôi"
-                    onPressDots={() => setScreen("05_EXPIRED")}
+                  <MobileBackHeader
+                    onBack={() => setScreen("01_HOME")}
+                    onNotifications={() => setScreen("11_NOTIFICATIONS")}
                   />
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                    <Text style={{ color: C.white, fontSize: 25, fontWeight: "800", flex: 1 }}>Gói tập của tôi</Text>
+                  </View>
 
                   {pkgNotice ? (
                     <View
@@ -681,14 +692,6 @@ export default function App() {
 
                   <View style={styles.monthRow}>
                     <Text style={styles.monthTitle}>{monthLabel}</Text>
-                    <Pressable
-                      style={styles.arrowsPill}
-                      onPress={() => {
-                        setScreen("03_QR_CODE");
-                      }}
-                    >
-                      <Text style={styles.arrowsPillText}>‹ ›</Text>
-                    </Pressable>
                   </View>
 
                   <WeekCalendarStrip />
@@ -700,10 +703,7 @@ export default function App() {
                       setScreen("03_QR_CODE");
                     }}
                   >
-                    <TopoAndAthleteDecoration
-                      imageUri={SPORTS_IMAGES.runnerCard}
-                      side="right"
-                    />
+                    <TopoAndAthleteDecoration side="right" />
                     <Text style={styles.limeBannerTitle}>{pkgName}</Text>
                     <Text style={styles.limeBannerSub}>
                       {summaryPkg?.allowedHoursLabel ||
@@ -725,7 +725,7 @@ export default function App() {
                       if (idx === 1) {
                         setScreen("03_QR_CODE");
                       } else if (idx === 2) {
-                        setScreen("05_EXPIRED");
+                        setScreen("12_PURCHASE");
                       }
                     }}
                   />
@@ -755,21 +755,16 @@ export default function App() {
                       ]}
                     >
                       <TopoAndAthleteDecoration side="right" />
-                      <Text style={styles.miniCardTitle}>Quyền bảo lưu</Text>
-                      <Text style={styles.miniCardBodyText}>
-                        {currentStatus === "FROZEN"
-                          ? "Gói đang tạm đóng băng bảo lưu."
-                          : durationMonths >= 6
-                            ? `Đã dùng ${frozenUsed}/${frozenLimit} ngày bảo lưu.`
-                            : "Áp dụng cho gói từ 6 tháng trở lên."}
+                      <Text style={styles.miniCardTitle}>
+                        {durationMonths >= 6 ? "Quyền bảo lưu" : "Không hỗ trợ bảo lưu"}
                       </Text>
-                      <View style={styles.goal96Pill}>
-                        <Text style={styles.goal96Text}>
-                          {totalDays > 0
-                            ? `${Math.round((remainingDays / totalDays) * 100)}%`
-                            : "0%"}
-                        </Text>
-                      </View>
+                      <Text style={styles.miniCardBodyText}>
+                        {durationMonths < 6
+                          ? "Chỉ áp dụng cho gói từ 6 tháng trở lên."
+                          : currentStatus === "FROZEN"
+                            ? `Đang bảo lưu · Đã dùng ${frozenUsed}/${frozenLimit} ngày.`
+                            : `Đã dùng ${frozenUsed}/${frozenLimit} ngày bảo lưu.`}
+                      </Text>
                     </View>
                   </View>
 
@@ -778,7 +773,7 @@ export default function App() {
                     <View style={{ flex: 1, justifyContent: "space-between" }}>
                       {[
                         {
-                          dot: C.lime,
+                          dot: C.strokeDark,
                           title: `${totalDays} Ngày`,
                           sub: `Tổng hạn ${pkgName}`,
                         },
@@ -788,7 +783,7 @@ export default function App() {
                           sub: `Bắt đầu từ ${fmtDate(detailPkg?.startsOn || summaryPkg?.startsOn)}`,
                         },
                         {
-                          dot: C.lilac,
+                          dot: C.lime,
                           title: `${remainingDays} Ngày`,
                           sub: `Còn lại đến ${fmtDate(summaryPkg?.endsInclusive || detailPkg?.endsBefore)}`,
                         },
@@ -813,10 +808,12 @@ export default function App() {
                     </View>
 
                     {/* Biểu đồ vòng tròn Donut */}
-                    <View style={styles.donutOuterRing}>
-                      <View style={styles.donutTopLeftHalf} />
-                      <View style={styles.donutBottomRightHalf} />
-                      <View style={styles.donutInnerHole} />
+                    <View style={styles.donutOuterRing} accessible accessibilityLabel={`Thời hạn gói: đã dùng ${elapsedDays} ngày, còn ${remainingDays} trên ${totalDays} ngày`}>
+                      <Svg width={112} height={112} viewBox="0 0 112 112">
+                        <Circle cx={56} cy={56} r={43} fill="none" stroke={C.strokeDark} strokeWidth={26} />
+                        <Circle cx={56} cy={56} r={43} fill="none" stroke={totalDays > 0 ? C.lavender : C.strokeDark} strokeWidth={26} />
+                        <Circle cx={56} cy={56} r={43} fill="none" stroke={C.lime} strokeWidth={26} strokeDasharray={`${2 * Math.PI * 43 * (totalDays > 0 ? Math.max(0, Math.min(1, remainingDays / totalDays)) : 0)} ${2 * Math.PI * 43}`} rotation={-90} origin="56, 56" />
+                      </Svg>
                     </View>
                   </View>
 
@@ -913,6 +910,7 @@ export default function App() {
           session && (
             <View style={{ flex: 1 }}>
               <CheckInPanel
+                onNotifications={() => setScreen("11_NOTIFICATIONS")}
                 key={session.accessToken}
                 baseUrl={apiBaseUrl}
                 token={session.accessToken}
@@ -962,6 +960,14 @@ export default function App() {
             const isActive = currentStatus === "ACTIVE";
             const isFrozen = currentStatus === "FROZEN";
             const isExpired = currentStatus === "EXPIRED";
+            const isScheduled = currentStatus === "SCHEDULED";
+            const isCancelled = currentStatus === "CANCELLED";
+            const startDate = detailPkg?.startsOn || summaryPkg?.startsOn;
+            const startShort = startDate
+              ? /^\d{4}-\d{2}-\d{2}/.test(startDate)
+                ? startDate.slice(0, 10).split("-").reverse().join("/")
+                : startDate
+              : "—";
             const pkgName =
               detailPkg?.packageName || summaryPkg?.packageName || "";
             const pkgCode =
@@ -980,14 +986,12 @@ export default function App() {
                   <View
                     style={[styles.heroCard188, { backgroundColor: C.coral }]}
                   >
-                    <TopoAndAthleteDecoration
-                      imageUri={SPORTS_IMAGES.runnerCard}
-                      side="right"
-                    />
-                    <WhiteCircleBadge
-                      bigText={String(summaryPkg?.daysRemaining ?? 0)}
-                      smallText="ngày"
-                    />
+                    {(isActive || isExpired) && (
+                      <WhiteCircleBadge
+                        bigText={String(summaryPkg?.daysRemaining ?? 0)}
+                        smallText="ngày"
+                      />
+                    )}
                     <Text style={[styles.heroCardSubLabel, { color: C.ink }]}>
                       Trạng thái hội viên
                     </Text>
@@ -998,7 +1002,13 @@ export default function App() {
                           ? "Thông tin gia hạn gói"
                           : isFrozen
                             ? "Gói tập đang bảo lưu"
-                            : "Gói tập đã hết hạn"}
+                            : isScheduled
+                              ? "Gói tập chưa đến ngày bắt đầu"
+                              : isCancelled
+                                ? "Gói tập đã hủy"
+                                : isExpired
+                                  ? "Gói tập đã hết hạn"
+                                  : "Chưa có gói tập"}
                     </Text>
                     <Text style={[styles.heroCardMeta, { color: C.ink }]}>
                       {pkgName
@@ -1007,7 +1017,13 @@ export default function App() {
                     </Text>
                     <View style={styles.heroPillAnchor188}>
                       <BlackMetricPill
-                        mainVal={endShort}
+                        mainVal={
+                          isScheduled
+                            ? startShort
+                            : isCancelled || !currentStatus || currentStatus === "NONE"
+                              ? "—"
+                              : endShort
+                        }
                         subVal={
                           isPendingPayment
                             ? "CHỜ THANH TOÁN"
@@ -1015,7 +1031,13 @@ export default function App() {
                               ? "NGÀY KẾT THÚC"
                               : isFrozen
                                 ? "ĐANG BẢO LƯU"
-                                : "ĐÃ KẾT THÚC"
+                                : isScheduled
+                                  ? "NGÀY BẮT ĐẦU"
+                                  : isCancelled
+                                    ? "ĐÃ HỦY"
+                                    : isExpired
+                                      ? "ĐÃ KẾT THÚC"
+                                      : "CHƯA CÓ GÓI"
                         }
                         accentHex={C.coral}
                       />
@@ -1052,14 +1074,24 @@ export default function App() {
 
                   <View style={styles.infoDarkCard136}>
                     <Text style={styles.guideCoralHeading}>
-                      Gia hạn trực tiếp tại quầy lễ tân
+                      Hướng dẫn sử dụng gói tập
                     </Text>
                     <Text style={styles.guideBodyText}>
-                      Vui lòng gặp nhân viên lễ tân để gia hạn gói tập mới. Thẻ
-                      vào phòng tập sẽ tự động kích hoạt lại ngay sau khi thanh
-                      toán.
+                      {isPendingPayment
+                        ? "Vui lòng liên hệ lễ tân để xác nhận thanh toán. Gói chỉ sử dụng được sau khi thanh toán và đến ngày bắt đầu."
+                        : isScheduled
+                          ? `Gói dự kiến bắt đầu từ ${startShort}. Quyền vào tập chỉ có hiệu lực khi đến ngày bắt đầu và đáp ứng đủ điều kiện sử dụng.`
+                          : isFrozen
+                            ? "Gói đang bảo lưu. Vui lòng liên hệ lễ tân nếu muốn kích hoạt lại trước hạn."
+                            : isCancelled
+                              ? "Gói đã hủy không còn quyền sử dụng. Vui lòng liên hệ lễ tân để đăng ký gói mới."
+                              : "Vui lòng gặp nhân viên lễ tân để đăng ký hoặc gia hạn. Quyền vào tập có hiệu lực khi gói đã thanh toán, đến ngày bắt đầu và đủ điều kiện sử dụng."}
                     </Text>
                   </View>
+
+                  <Pressable accessibilityRole="button" style={styles.limePillButton} onPress={() => setScreen("12_PURCHASE")}>
+                    <Text style={styles.limePillButtonText}>Đăng ký hoặc gia hạn gói</Text>
+                  </Pressable>
 
                   <Pressable
                     style={[
@@ -1080,12 +1112,28 @@ export default function App() {
             );
           })()}
 
+        {screen === "12_PURCHASE" && session && (
+          <PackagePurchasePanel
+            baseUrl={apiBaseUrl}
+            onNavigate={setScreen}
+            session={session}
+            onBack={() => setScreen("02_MY_PACKAGE")}
+            onChanged={() => {
+              void loadMyPackageData(session);
+              void refreshMyMembership(apiBaseUrl, session).then(membership => {
+                setSession(current => current && current.accessToken === session.accessToken ? { ...current, membership } : current);
+              }).catch(() => {});
+            }}
+          />
+        )}
+
         {/* =====================================================================
           10 · NHẬT KÝ TẬP LUYỆN (UC13)
          ===================================================================== */}
         {screen === "10_WORKOUT_LOG" && session && (
           <View style={styles.darkScreenRoot}>
             <WorkoutLogPanel
+              onNotifications={() => setScreen("11_NOTIFICATIONS")}
               baseUrl={apiBaseUrl}
               session={session}
               onBack={() => setScreen("01_HOME")}
@@ -1949,7 +1997,7 @@ const styles = StyleSheet.create({
     width: 112,
     height: 112,
     borderRadius: 56,
-    backgroundColor: C.lavender,
+    flexShrink: 0,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
