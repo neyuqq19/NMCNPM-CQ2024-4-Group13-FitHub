@@ -204,6 +204,7 @@ export interface CheckInScannerDto {
 }
 
 export interface PurchaseOptionsDto {
+  serverDate?: string;
   member: {
     id: string;
     memberCode: string;
@@ -305,6 +306,7 @@ export interface ConfirmPaymentRequest {
   reference?: string;
 }
 export interface CreateVNPayUrlResponse {
+  simulationAllowed?: boolean;
   paymentId: string;
   paymentCode: string;
   paymentUrl: string;

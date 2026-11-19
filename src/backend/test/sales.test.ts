@@ -415,3 +415,87 @@ test("Dashboard: Vietnam midnight includes start and excludes next day", async (
     before.body.checkInSeries.at(-1).count + 2,
   );
 });
+
+test("Member purchase: auth, own profile and admin endpoint separation", async () => {
+  const m = await fixture();
+  await api.get('/api/my/purchase-options').expect(401);
+  await api.get('/api/my/purchase-options').set(auth()).expect(403);
+  const opts = (await api.get('/api/my/purchase-options').set(auth(m.token)).expect(200)).body;
+  assert.equal(opts.member.id, m.id);
+  assert.equal(opts.serverDate, day);
+  assert.ok(opts.packages.some((p: {id: string}) => p.id === pack.id));
+  await api.post('/api/memberships/register').set(auth(m.token)).send({...body(), memberId: randomUUID()}).expect(400);
+  await api.post(`/api/members/${m.id}/memberships`).set(auth(m.token)).send(body()).expect(403);
+});
+
+test("Member purchase: pending creation is idempotent and price checked", async () => {
+  const m = await fixture();
+  const url = '/api/memberships/register';
+  const req = body();
+  const first = (await api.post(url).set(auth(m.token)).send(req).expect(201)).body;
+  assert.equal(first.status, 'PENDING'); assert.equal(first.membership.status, 'PENDING_PAYMENT');
+  assert.equal((await api.post(url).set(auth(m.token)).send(req).expect(201)).body.id, first.id);
+  assert.equal(await db.membership.count({where: {memberId: m.id}}), 1);
+  const other = await fixture();
+  await api.post(url).set(auth(other.token)).send(req).expect(409);
+  await api.get(`/api/my/payments/${first.id}`).set(auth(other.token)).expect(404);
+  await api.post(`/api/my/payments/${first.id}/cancel`).set(auth(other.token)).expect(404);
+  await api.get(`/api/payments/${first.id}`).set(auth(m.token)).expect(403);
+  const clean = await fixture();
+  const changed = await api.post(url).set(auth(clean.token)).send({...body(),expectedPrice: 1}).expect(409);
+  assert.equal(changed.body.code,'PRICE_CHANGED');
+  assert.equal(await db.membership.count({where:{memberId:clean.id}}),0);
+  const unverified = await fixture('PENDING_VERIFY');
+  await api.post(url).set(auth(unverified.token)).send(body()).expect(401);
+});
+
+test("Member purchase: cancel pending orders without granting benefits or duplicate changes", async () => {
+  const m = await fixture();
+  const order = (await api.post('/api/memberships/register').set(auth(m.token)).send(body()).expect(201)).body;
+  const endpoint = `/api/my/payments/${order.id}/cancel`;
+  const cancelled = (await api.post(endpoint).set(auth(m.token)).expect(200)).body;
+  assert.equal(cancelled.status,'CANCELLED'); assert.equal(cancelled.membershipStatus,'CANCELLED');
+  assert.equal((await api.post(endpoint).set(auth(m.token)).expect(200)).body.status,'CANCELLED');
+  const list = (await api.get('/api/my/payments').set(auth(m.token)).expect(200)).body;
+  assert.equal(list[0].id,order.id);
+});
+
+test("Member purchase: own simulated VNPay retry then confirmed status and invoice", async () => {
+  const m = await fixture();
+  const order = (await api.post('/api/memberships/register').set(auth(m.token)).send(body()).expect(201)).body;
+  const start = `/api/payments/${order.id}/vnpay-url`;
+  const vnp = (await api.post(start).set(auth(m.token)).expect(200)).body;
+  assert.equal(vnp.mode,'SIMULATED'); assert.equal(vnp.simulationAllowed,true);
+  assert.equal((await api.post(`/api/my/payments/${order.id}/cancel`).set(auth(m.token)).expect(409)).body.code,'ONLINE_PAYMENT_IN_PROGRESS');
+  await api.post(`/api/payments/${order.id}/vnpay-simulate`).set(auth(m.token)).send({result:'FAILED'}).expect(200);
+  assert.equal((await api.get(`/api/my/payments/${order.id}`).set(auth(m.token)).expect(200)).body.status,'FAILED');
+  const retried=(await api.post(start).set(auth(m.token)).expect(200)).body;
+  assert.notEqual(retried.txnRef,vnp.txnRef);
+  const paid=(await api.post(`/api/payments/${order.id}/vnpay-simulate`).set(auth(m.token)).send({result:'SUCCESS'}).expect(200)).body;
+  assert.equal(paid.payment.status,'CONFIRMED');
+  const own=(await api.get(`/api/my/payments/${order.id}`).set(auth(m.token)).expect(200)).body;
+  assert.equal(own.membershipStatus,'ACTIVE'); assert.equal(own.benefitStatus,'GRANTED'); assert.equal(own.invoice.status,'ISSUED');
+  await api.post(`/api/my/payments/${order.id}/cancel`).set(auth(m.token)).expect(409);
+});
+
+test("Member renewal: uses period end, creates SCHEDULED after payment and rejects extra future package", async () => {
+  const m=await fixture();
+  const current=(await register(m.id).expect(201)).body;
+  await confirm(current).expect(200);
+  const options=(await api.get('/api/my/purchase-options').set(auth(m.token)).expect(200)).body;
+  assert.equal(options.suggestedStartsOn,current.membership.endsBefore);
+  const renewal=(await api.post('/api/memberships/register').set(auth(m.token)).send(body(options.suggestedStartsOn)).expect(201)).body;
+  await confirm(renewal).expect(200);
+  const view=(await api.get(`/api/my/payments/${renewal.id}`).set(auth(m.token)).expect(200)).body;
+  assert.equal(view.membershipStatus,'SCHEDULED');
+  const next=addMonths(options.suggestedStartsOn,1).toISOString().slice(0,10);
+  const denied=await api.post('/api/memberships/register').set(auth(m.token)).send(body(next)).expect(409);
+  assert.equal(denied.body.code,'SCHEDULED_LIMIT_REACHED');
+});
+
+test("Member purchase: concurrent duplicate requests create one registration", async () => {
+  const m=await fixture();const req=body();
+  const res=await Promise.all([1,2].map(()=>api.post('/api/memberships/register').set(auth(m.token)).send(req)));
+  assert.deepEqual(res.map(r=>r.status),[201,201]);assert.equal(res[0].body.id,res[1].body.id);
+  assert.equal(await db.membership.count({where:{memberId:m.id}}),1);
+});

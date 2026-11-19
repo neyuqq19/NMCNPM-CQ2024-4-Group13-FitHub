@@ -38,7 +38,8 @@ class ConfirmDto {
   @IsUUID() idempotencyKey!: string;
   @IsInt() @Min(1) amount!: number;
   // UC15: Admin chọn hình thức thu tại quầy; mặc định CASH.
-  @IsOptional() @IsIn(["CASH", "BANK_TRANSFER"]) method?: "CASH" | "BANK_TRANSFER";
+  @IsOptional() @IsIn(["CASH", "BANK_TRANSFER"]) method?:
+    "CASH" | "BANK_TRANSFER";
   @IsOptional() @IsString() @MaxLength(100) reference?: string;
 }
 @Controller("api")
@@ -47,6 +48,25 @@ class SalesController {
     @Inject(AuthService) private auth: AuthService,
     @Inject(SalesService) private sales: SalesService,
   ) {}
+  @Get("my/purchase-options")
+  async myOptions(@Headers("authorization") h?: string) {
+    return this.sales.optionsMine(await this.auth.validateSession(h));
+  }
+  @Post("memberships/register")
+  async registerMine(
+    @Body(
+      new ValidationPipe({
+        expectedType: RegisterDto,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    )
+    b: RegisterDto,
+    @Headers("authorization") h?: string,
+  ) {
+    return this.sales.registerMine(await this.auth.validateSession(h), b);
+  }
   @Get("members/:id/purchase-options") options(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Headers("authorization") h?: string,

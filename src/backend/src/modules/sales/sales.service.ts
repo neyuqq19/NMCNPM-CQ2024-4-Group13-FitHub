@@ -94,8 +94,31 @@ export class SalesService {
         message: "Tài khoản quản trị không còn hiệu lực.",
       });
   }
+  private async ownProfile(user: CurrentUser) {
+    if (user.role !== "MEMBER")
+      throw new ForbiddenException({
+        code: "ROLE_FORBIDDEN",
+        message: "Chỉ hội viên sử dụng chức năng này.",
+      });
+    const member = await this.db.memberProfile.findUnique({
+      where: { userId: user.id },
+    });
+    if (!member)
+      throw new NotFoundException({
+        code: "MEMBER_NOT_FOUND",
+        message: "Không tìm thấy hồ sơ hội viên.",
+      });
+    return member;
+  }
+  async optionsMine(user: CurrentUser) {
+    const member = await this.ownProfile(user);
+    return this.optionsFor(member.id);
+  }
   async options(user: CurrentUser, id: string) {
     this.requireAdmin(user);
+    return this.optionsFor(id);
+  }
+  private async optionsFor(id: string) {
     return this.db.$transaction(async (tx) => {
       const p = await this.profile(tx, id);
       const [packages, paid, pending] = await Promise.all([
@@ -123,6 +146,7 @@ export class SalesService {
       ]);
       const today = gymClock(new Date()).day;
       return {
+        serverDate: today,
         member: {
           id: p.id,
           memberCode: p.memberCode,
@@ -159,16 +183,34 @@ export class SalesService {
     const block = await findOverlapBlock(tx, memberId, start, end, except);
     if (block) conflict(block.code, block.message);
   }
+  async registerMine(user: CurrentUser, body: RegisterMembershipRequest) {
+    const member = await this.ownProfile(user);
+    return this.registerFor(user, member.id, body, true);
+  }
   async register(
     user: CurrentUser,
     id: string,
     body: RegisterMembershipRequest,
   ) {
+    this.requireAdmin(user);
+    return this.registerFor(user, id, body, false);
+  }
+  private async registerFor(
+    user: CurrentUser,
+    id: string,
+    body: RegisterMembershipRequest,
+    self: boolean,
+  ) {
     return this.db
       .$transaction(
         async (tx) => {
-          await this.actor(tx, user);
+          if (!self) await this.actor(tx, user);
           const p = await this.profile(tx, id, true);
+          if (self && (p.userId !== user.id || p.user.role !== "MEMBER"))
+            throw new ForbiddenException({
+              code: "ROLE_FORBIDDEN",
+              message: "Chỉ đăng ký gói cho tài khoản của mình.",
+            });
           const old = await tx.membership.findUnique({
             where: { requestId: body.requestId },
             include: { payment: { include: includePayment } },

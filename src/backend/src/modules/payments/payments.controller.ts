@@ -97,4 +97,21 @@ export class PaymentsController {
     const user = await this.auth.validateSession(h);
     return this.payments.myPayments(user);
   }
+
+  @Get("my/payments/:id")
+  async myPayment(
+    @Headers("authorization") h: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
+  ) {
+    return this.payments.getMine(await this.auth.validateSession(h), id);
+  }
+
+  @Post("my/payments/:id/cancel")
+  @HttpCode(200)
+  async cancelMine(
+    @Headers("authorization") h: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
+  ) {
+    return this.payments.cancelMine(await this.auth.validateSession(h), id);
+  }
 }
