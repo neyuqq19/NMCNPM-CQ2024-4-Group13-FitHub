@@ -102,6 +102,22 @@ async function makeMembership(
   created.memberships.push(m.id);
   return { id: m.id, memberId };
 }
+// UC08 is installed: dispatch only accepts appointments persisted as CONFIRMED.
+const appointmentIds: string[] = [];
+const slotIds: string[] = [];
+const trainerIds: string[] = [];
+async function makeAppointment(userId: string, startTime: Date) {
+  const existing = await db.membership.findFirst({where:{member:{userId}},select:{id:true,memberId:true}});
+  const membership = existing ?? await makeMembership(userId, {start:"2026-11-01",end:"2026-12-01",status:"ACTIVE"});
+  const trainerUser = await makeUser("TRAINER");
+  const trainer = await db.trainerProfile.upsert({where:{userId:trainerUser.id},update:{},create:{userId:trainerUser.id,trainerCode:`UC16-${randomUUID()}`}});
+  trainerIds.push(trainer.id);
+  const slot = await db.workingSlot.create({data:{trainerId:trainer.id,memberId:membership.memberId,workDate:new Date(startTime.toISOString().slice(0,10)+"T00:00:00Z"),startTime,endTime:new Date(startTime.getTime()+HOUR),status:"BOOKED"}});
+  slotIds.push(slot.id);
+  const appointment = await db.appointment.create({data:{code:`UC16-${randomUUID()}`,memberId:membership.memberId,trainerId:trainer.id,slotId:slot.id,membershipId:membership.id,status:"CONFIRMED"}});
+  appointmentIds.push(appointment.id);
+  return appointment.id;
+}
 // Notifications of a user, newest first, read straight from the database.
 const inbox = (userId: string) =>
   db.notification.findMany({ where: { recipientId: userId }, orderBy: { createdAt: "desc" } });
@@ -126,6 +142,9 @@ after(async () => {
   const mine = { recipientId: { in: created.users } };
   await db.reminder.deleteMany({ where: mine });
   await db.notification.deleteMany({ where: mine });
+  await db.appointment.deleteMany({where:{id:{in:appointmentIds}}});
+  await db.workingSlot.deleteMany({where:{id:{in:slotIds}}});
+  await db.trainerProfile.deleteMany({where:{id:{in:trainerIds}}});
   // Confirmed payments are immutable by design, so a paid membership (and the people behind it) stays.
   // Everything else is removed; a refusal here is expected and harmless.
   for (const remove of [
@@ -222,7 +241,7 @@ test("NTF-03: appointment reminders go to member and PT, once, and only for futu
 test("NTF-04: due reminders become inbox rows exactly once (BR04) and a cancelled source is never sent (BR03)", async () => {
   const member = await makeUser("MEMBER");
   const now = new Date("2026-11-12T00:00:00Z");
-  const appointmentId = randomUUID();
+  const appointmentId = await makeAppointment(member.id, new Date("2026-11-12T05:00:00Z"));
   await service.scheduleAppointmentReminders({
     appointmentId,
     startTime: new Date("2026-11-12T05:00:00Z"),
@@ -242,23 +261,27 @@ test("NTF-04: due reminders become inbox rows exactly once (BR04) and a cancelle
 
   // BR03: appointment no longer CONFIRMED -> reminder cancelled, nothing sent.
   const other = await makeUser("MEMBER");
-  const cancelled = randomUUID();
+  const cancelled = await makeAppointment(other.id, new Date("2026-11-20T05:00:00Z"));
   await service.scheduleAppointmentReminders({
     appointmentId: cancelled,
     startTime: new Date("2026-11-20T05:00:00Z"),
     memberUserId: other.id,
     now: new Date("2026-11-11T00:00:00Z"),
   });
-  const internals = service as unknown as { appointments: { isConfirmed(id: string): Promise<boolean> } };
-  const original = internals.appointments;
-  internals.appointments = { isConfirmed: async () => false };
-  try {
-    await service.processDueReminders({ now: new Date("2026-11-20T04:00:00Z") });
-  } finally {
-    internals.appointments = original;
-  }
+  await db.appointment.update({where:{id:cancelled},data:{status:"CANCELLED_BY_MEMBER",cancelReason:"Test cancellation",cancelledAt:now}});
+  await service.processDueReminders({ now: new Date("2026-11-20T04:00:00Z") });
   assert.equal((await inbox(other.id)).length, 0);
   assert.equal(await db.reminder.count({ where: { sourceId: cancelled, status: "CANCELLED" } }), 2);
+  const missing = randomUUID();
+  await service.scheduleAppointmentReminders({
+    appointmentId: missing,
+    startTime: new Date("2026-11-20T05:00:00Z"),
+    memberUserId: other.id,
+    now: new Date("2026-11-11T00:00:00Z"),
+  });
+  await service.processDueReminders({ now: new Date("2026-11-20T04:00:00Z") });
+  assert.equal((await inbox(other.id)).length, 0);
+  assert.equal(await db.reminder.count({ where: { sourceId: missing, status: "CANCELLED" } }), 2);
 });
 
 test("NTF-05 + E1: the inbox row survives a push failure, and every attempt is recorded", async () => {
@@ -276,7 +299,7 @@ test("NTF-05 + E1: the inbox row survives a push failure, and every attempt is r
   void now;
 
   // Not registered yet -> inbox row exists, attempt FAILED.
-  await schedule(randomUUID());
+  await schedule(await makeAppointment(member.id, new Date("2026-11-12T05:00:00Z")));
   await service.processDueReminders({ now: due });
   let rows = await db.notification.findMany({
     where: { recipientId: member.id },
@@ -292,12 +315,12 @@ test("NTF-05 + E1: the inbox row survives a push failure, and every attempt is r
     .send({ deviceId: "phone-1", platform: "MOBILE", pushToken: "fcm-token-1" });
   assert.equal(dev.status, 200);
   assert.equal(dev.body.enabled, true);
-  await schedule(randomUUID());
+  await schedule(await makeAppointment(member.id, new Date("2026-11-12T05:00:00Z")));
   const ok = await service.processDueReminders({ now: due });
   assert.equal(ok.pushSent, 1);
 
   // E1: push throws -> inbox row still there, attempt FAILED with the message.
-  await schedule(randomUUID());
+  await schedule(await makeAppointment(member.id, new Date("2026-11-12T05:00:00Z")));
   const bad = await service.processDueReminders({ now: due, simulatePushFailure: true });
   assert.equal(bad.sent, 1);
   assert.equal(bad.pushFailed, 1);
