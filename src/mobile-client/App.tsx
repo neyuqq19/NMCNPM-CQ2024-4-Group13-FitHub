@@ -190,23 +190,26 @@ function FilterTrack({
 
 function WeekCalendarStrip() {
   const dows = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-  const doms = ["04", "05", "06", "07", "08", "09", "10"];
+  const today = new Date(Date.now() + 7 * 3600000);
+  const weekday = (today.getUTCDay() + 6) % 7;
+  const monday = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - weekday);
+  const doms = dows.map((_, i) => String(new Date(monday + i * 86400000).getUTCDate()).padStart(2, "0"));
   return (
     <View style={styles.weekStrip}>
       {dows.map((dow, i) => {
-        const isWed = i === 2;
+        const isToday = i === weekday;
         return (
-          <View key={dow} style={styles.weekDayCol}>
-            <Text style={[styles.weekDowText, isWed && { color: C.white }]}>
+          <View key={dow} style={styles.weekDayCol} accessible accessibilityLabel={`${dow} ${new Date(monday + i * 86400000).toISOString().slice(0, 10)}${isToday ? ", hôm nay" : ""}`}>
+            <Text style={[styles.weekDowText, isToday && { color: C.white }]}>
               {dow}
             </Text>
             <View
               style={[
                 styles.weekDomCircle,
-                isWed && { backgroundColor: C.lime },
+                isToday && { backgroundColor: C.lime },
               ]}
             >
-              <Text style={[styles.weekDomText, isWed && { color: C.ink }]}>
+              <Text style={[styles.weekDomText, isToday && { color: C.ink }]}>
                 {doms[i]}
               </Text>
             </View>

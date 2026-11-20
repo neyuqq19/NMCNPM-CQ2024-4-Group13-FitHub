@@ -225,7 +225,11 @@ test("DB sales 05: cancellation retained, replay is safe, cancelled invoices can
     api.post(`/api/payments/${p.id}/cancel`).set(auth()).send({});
   assert.equal((await cancel()).body.status, "CANCELLED");
   assert.equal((await cancel()).body.membership.status, "CANCELLED");
-  assert.equal((await confirm(p)).body.code, "PAYMENT_CANCELLED");
+  const rejected = await confirm(p);
+  assert.equal(rejected.status, 409);
+  assert.equal(rejected.body.code, "PAYMENT_ALREADY_PROCESSED");
+  assert.equal((await db.payment.findUniqueOrThrow({where:{id:p.id}})).status,"CANCELLED");
+  assert.equal((await db.membership.findUniqueOrThrow({where:{id:p.membership.id}})).status,"CANCELLED");
   assert.equal(
     await db.auditLog.count({
       where: { entityId: p.id, action: "PAYMENT_CANCEL" },
