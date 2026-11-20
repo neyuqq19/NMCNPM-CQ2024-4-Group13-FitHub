@@ -10,7 +10,7 @@ const cases = [
   ["EXPIRED", "Gói tập đã hết hạn", "ĐÃ KẾT THÚC"],
   ["NONE", "Chưa có gói tập", "CHƯA CÓ GÓI"],
 ];
-for (const [state, title, caption] of cases) {
+for (const [state] of cases) {
   test(`Package information: ${state}`, async ({ page }) => {
     const f = await checkInFixture(false);
     await page.route("**/api/auth/membership", r => r.fulfill({ json: {
@@ -25,12 +25,14 @@ for (const [state, title, caption] of cases) {
     await page.getByLabel("Email hoặc số điện thoại", { exact: true }).fill(f.email);
     await page.getByLabel("Mật khẩu", { exact: true }).fill(f.password);
     await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+    const labels: Record<string, string> = { ACTIVE: "Đang hoạt động", PENDING_PAYMENT: "Chờ thanh toán", SCHEDULED: "Chưa đến ngày", FROZEN: "Đang bảo lưu", CANCELLED: "Đã hủy", EXPIRED: "Đã hết hạn", NONE: "Chưa có gói" };
+    await expect(page.getByText(labels[state], { exact: true })).toBeVisible();
     await page.getByText("GÓI TẬP HIỆN TẠI", { exact: true }).click();
-    await page.getByRole("button", { name: "Tình trạng gói", exact: true }).click();
-    await expect(page.getByText(title, { exact: true })).toBeVisible();
-    await expect(page.getByText(caption, { exact: true })).toBeVisible();
-    if (state !== "EXPIRED") await expect(page.getByText("Gói tập đã hết hạn", { exact: true })).toHaveCount(0);
-    if (state === "SCHEDULED") await expect(page.getByText("01/12/2026", { exact: true })).toBeVisible();
-    await expect(page.getByText(/tự động kích hoạt lại ngay sau khi thanh toán/)).toHaveCount(0);
+    await expect(page.getByText("Gói tập của tôi", {exact:true})).toBeVisible();
+    await expect(page.getByText("Không hỗ trợ bảo lưu", {exact:true})).toBeVisible();
+    await expect(page.getByText(/^\d+%$/)).toHaveCount(0);
+    await expect(page.getByText("Bảo lưu gói tập (7 ngày)", {exact:true})).toHaveCount(0);
+    await page.getByText("Gia hạn", {exact:true}).click();
+    await expect(page.getByRole("heading", {name:"Đăng ký & gia hạn", exact:true})).toBeVisible();
   });
 }

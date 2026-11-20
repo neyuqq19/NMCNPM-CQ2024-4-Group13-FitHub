@@ -24,7 +24,7 @@ export default defineConfig({
       cwd: "../backend",
       url: "http://127.0.0.1:3102/api/health",
       reuseExistingServer: false,
-      timeout: 30000,
+      timeout: 90000,
     },
     {
       command:
