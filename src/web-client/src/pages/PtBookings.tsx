@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   AppointmentActionResponse,
   AppointmentDto,
@@ -76,6 +76,30 @@ export function PtBookingsPage({ role }: { role: Role }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [failure, setFailure] = useState("");
+  const [now, setNow] = useState(Date.now);
+
+  useEffect(() => {
+    const updateNow = () => setNow(Date.now());
+    const timer = window.setInterval(updateNow, 1000);
+    document.addEventListener("visibilitychange", updateNow);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", updateNow);
+    };
+  }, []);
+
+  function openCancellation(appointment: AppointmentDto) {
+    setNow(Date.now());
+    setReason("");
+    setFailure("");
+    setCancelling(appointment);
+  }
+
+  function closeCancellation() {
+    setCancelling(null);
+    setReason("");
+    setFailure("");
+  }
 
   async function run(path: string, body?: unknown) {
     setBusy(true);
@@ -99,7 +123,6 @@ export function PtBookingsPage({ role }: { role: Role }) {
     }
   }
 
-  const now = Date.now();
   const hoursLeft = cancelling
     ? (new Date(cancelling.startTime).getTime() - now) / 3600_000
     : 0;
@@ -125,7 +148,7 @@ export function PtBookingsPage({ role }: { role: Role }) {
         }
       />
       {message && <Notice>{message}</Notice>}
-      {failure && <Notice error>{failure}</Notice>}
+      {failure && !cancelling && <Notice error>{failure}</Notice>}
       <div className="search-bar pt-filters">
         <select
           aria-label="Trạng thái lịch hẹn"
@@ -209,7 +232,7 @@ export function PtBookingsPage({ role }: { role: Role }) {
                             <button
                               className="button outline"
                               disabled={busy}
-                              onClick={() => setCancelling(a)}
+                              onClick={() => openCancellation(a)}
                             >
                               PT hủy lịch
                             </button>
@@ -257,7 +280,9 @@ export function PtBookingsPage({ role }: { role: Role }) {
             <p>
               {day(cancelling.workDate)} · {range(cancelling)}
             </p>
-            {hoursLeft < PT_COMPENSATION_HOURS ? (
+            {hoursLeft <= 0 ? (
+              <Notice error>Buổi tập đã bắt đầu, không thể hủy lịch.</Notice>
+            ) : hoursLeft < PT_COMPENSATION_HOURS ? (
               <Notice error>
                 Hủy lịch sát giờ (&lt; 6 tiếng): hội viên sẽ được hoàn lại buổi
                 tập và được cộng đền bù thêm +1 buổi PT.
@@ -265,6 +290,7 @@ export function PtBookingsPage({ role }: { role: Role }) {
             ) : (
               <Notice>Hội viên sẽ được hoàn lại 1 buổi PT.</Notice>
             )}
+            {failure && <Notice error>{failure}</Notice>}
             <label className="field">
               Lý do hủy (bắt buộc)
               <textarea
@@ -278,13 +304,13 @@ export function PtBookingsPage({ role }: { role: Role }) {
               <button
                 className="button outline"
                 disabled={busy}
-                onClick={() => setCancelling(null)}
+                onClick={closeCancellation}
               >
                 Đóng
               </button>
               <button
                 className="button primary"
-                disabled={busy || !reason.trim()}
+                disabled={busy || !reason.trim() || hoursLeft <= 0}
                 onClick={() =>
                   run(`/api/appointments/${cancelling.id}/cancel-by-pt`, {
                     reason: reason.trim(),

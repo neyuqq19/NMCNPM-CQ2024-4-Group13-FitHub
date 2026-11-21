@@ -22,3 +22,10 @@ Mở sheet **Test cases** trong `UC08-Test-cases.xlsx` rồi tra thư mục theo
 Ca âm (`TC-UC08-002`, `TC-UC08-003`) được tính Pass khi hệ thống từ chối đúng mã lỗi và bảo toàn số buổi PT. Các phép thử biên mở rộng (gửi lặp hủy lần hai, Admin xác minh `NO_SHOW`) đã kiểm tra đạt nhưng không cộng vượt quá 7 ca chính.
 
 Workbook dùng đúng mẫu của nhóm, gồm hai sheet **Features** và **Test cases**.
+
+
+## Rà soát mô tả bước thao tác — 21/11/2026
+
+Chỉ bổ sung chi tiết ở cột Test step (D3, D4, D6, D7, D8, D9) để thao tác rõ hơn theo giao diện đã đối chiếu. Không đổi tiền điều kiện, ngày ca, Actual Result, Status, Tester, Tested Date, Remark hay các minh chứng của lần bàn giao gốc: **16/11/2026 — commit `3b28ead`**. Kết quả 7 ca chính Pass ở trên vẫn là kết quả của lần chạy gốc, không phải kết quả chạy mới ngày 21/11.
+
+Các bước API tiếp tục được ghi là API; không đổi thành đã thao tác trên giao diện hoặc thiết bị thật. Ca dùng lại minh chứng cũ giữ nguyên thời gian và commit gốc. Lần chạy mới phải có thư mục minh chứng, thời điểm thực thi và thông tin phiên bản riêng.
