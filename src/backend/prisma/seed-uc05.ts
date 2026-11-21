@@ -61,6 +61,8 @@ const accountFixtures = [
   { key: "M4", email: "uc05.m4@example.com", memberCode: "HV900504" },
   { key: "M5", email: "uc05.m5@example.com", memberCode: "HV900505" },
   { key: "M6", email: "uc05.m6@example.com", memberCode: "HV900506" },
+  // M7 is reserved for rerunning TC-UC05-001 from a clean state (no Membership).
+  { key: "M7", email: "uc05.m7@example.com", memberCode: "HV900507" },
 ] as const;
 
 const membershipFixtures = [
@@ -316,7 +318,7 @@ async function main() {
 
   console.log("UC05 seed completed on local fithub_test.");
   console.log(JSON.stringify(result, null, 2));
-  console.log("M1 intentionally has no membership.");
+  console.log("M1 and M7 are intentionally not assigned fixture memberships by this seed.");
   console.log("No FreezePeriod records were created; create those through the UC05 UI steps.");
   console.log("New accounts and promoted M1 use SEED_PASSWORD; existing ACTIVE fixture accounts keep their current passwords.");
 }
