@@ -1,0 +1,132 @@
+﻿"Function/Feature ID","Case ID","Test case name","Test step","Expected Result (ER)","Actual Result","Status","Tester","Tested Date","Remark"
+"Function 03: Đặt lịch hẹn PT 1-1 (UC08)","","","","","","","","",""
+"UC08","TC-UC08-001","Hội viên còn buổi PT (N >= 1) chọn PT và ca trống để đặt lịch hẹn 1-1 thành công (Happy Path / EP hợp lệ)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead (nhánh main), CSDL kiểm thử độc lập fithub_test (127.0.0.1:55432).
+- Huấn luyện viên đang ACTIVE có mở ca làm việc chuẩn 60 phút (15:00–16:00 ngày kế tiếp, trạng thái OPEN).
+- Hội viên đã xác minh có gói GYM06 (ACTIVE, còn hạn đến 01/06/2027), số buổi PT trước khi đặt: N_truoc_dat = 4 buổi.
+
+Các bước thực hiện:
+1. Đăng nhập ứng dụng Mobile với tài khoản Hội viên test; vào màn hình 'Tìm huấn luyện viên', ghi nhận số dư hiển thị '4 buổi PT còn lại'.
+2. Tìm kiếm PT, bấm 'Xem hồ sơ & đặt lịch', chọn ngày tập ngày mai và chọn khung giờ ca trống '15:00 – 16:00'.
+3. Kiểm tra hộp thoại 'Xác nhận đặt lịch' (gọi GET /api/appointments/booking-preview): hiển thị 'Gói dự kiến: Gym 6 tháng + PT' và 'Còn 4 buổi · Giữ 1 buổi khi đặt'.
+4. Bấm nút 'Xác nhận đặt lịch' (POST /api/appointments).
+5. Đóng hồ sơ PT, mở mục 'Lịch tập của tôi' -> tab 'Sắp tới' trên Mobile; đồng thời đăng nhập Web Admin (admin@fithub.vn) và Web PT (trainer@fithub.vn) vào mục 'Lịch hẹn PT' (#/pt-bookings), bấm tải lại trang (F5).","1. Hệ thống trả về HTTP 201 Created, tạo đúng 01 bản ghi Appointment ở trạng thái CONFIRMED, ptSessionState = HELD.
+2. Trạng thái ca làm việc (WorkingSlot) chuyển từ OPEN sang BOOKED.
+3. Số buổi PT còn lại của hội viên giảm 1 buổi: N_sau_dat = 4 - 1 = 3 buổi (ptAvailable = 3).
+4. Tự động khởi tạo 2 mốc nhắc lịch (Reminder 24h và 2h) ở trạng thái PENDING.
+5. Trên cả Mobile và Web (/pt-bookings của Admin & PT) hiển thị cùng mã lịch hẹn (LHxxxxxx), đúng ngày tập và khung giờ (15:00 – 16:00); sau khi tải lại trang dữ liệu vẫn giữ nguyên.","1. API trả về 201 Created; tạo lịch hẹn CONFIRMED (ptSessionState = HELD).
+2. WorkingSlot chuyển từ OPEN sang BOOKED.
+3. Số dư PT ghi nhận: Trước đặt = 4 buổi -> Sau đặt = 3 buổi.
+4. Web Admin, Web PT và Mobile hiển thị đồng nhất mã lịch, ngày và giờ tập; reload trang vẫn giữ nguyên dữ liệu.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-001/ (01..05.png, evidence.json)"
+"UC08","TC-UC08-002","Từ chối đặt lịch khi hội viên đã hết buổi PT khả dụng (N = 0) (BVA biên dưới số buổi PT - BR01, E2)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead, CSDL fithub_test.
+- Hội viên đang ACTIVE nhưng số buổi PT còn lại bằng 0 (ptSessionsRemaining = 0).
+- Ca làm việc của PT ngày mai khung 16:30–17:30 đang ở trạng thái OPEN.
+
+Các bước thực hiện:
+1. Đăng nhập Mobile bằng tài khoản Hội viên có 0 buổi PT; kiểm tra màn hình hiển thị '0 buổi PT còn lại'.
+2. Mở hồ sơ PT, chọn ngày mai và bấm chọn ca trống '16:30 – 17:30'.
+3. Quan sát thông báo trên hộp thoại 'Xác nhận đặt lịch' và trạng thái nút 'Xác nhận đặt lịch'.
+4. Gửi trực tiếp yêu cầu POST /api/appointments với { slotId } bằng token của hội viên này để kiểm tra chốt chặn ở tầng Backend.
+5. Đối chiếu lại trạng thái WorkingSlot, số lượng Appointment trên ca đó và ptSessionsRemaining trong DB.","1. Trên Mobile: Hộp thoại xác nhận hiển thị cảnh báo 'Bạn không có gói còn buổi PT hợp lệ cho ngày tập này.' và khóa (disabled) nút 'Xác nhận đặt lịch'.
+2. Ở tầng API: Yêu cầu POST /api/appointments bị từ chối với mã HTTP 400 Bad Request, code = 'INSUFFICIENT_PT_SESSIONS'.
+3. Không tạo bản ghi Appointment nào (count = 0), trạng thái ca WorkingSlot giữ nguyên OPEN, số buổi PT giữ nguyên 0 (không bị âm).","1. Mobile hiển thị đúng thông báo lỗi và khóa nút 'Xác nhận đặt lịch'.
+2. API trả về đúng HTTP 400 INSUFFICIENT_PT_SESSIONS ('Bạn đã hết số buổi PT khả dụng. Vui lòng mua thêm gói PT.').
+3. Số dư PT trước = 0, sau = 0 (không âm); WorkingSlot giữ nguyên OPEN; không có lịch hẹn nào được tạo.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-002/ (01-mobile-zero-pt-rejected.png, evidence.json)"
+"UC08","TC-UC08-003","Chống đặt trùng khi hai hội viên cùng gửi yêu cầu đặt chung một ca trống đồng thời (Concurrency / SR02 / E1)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead, CSDL fithub_test.
+- Hai hội viên độc lập: Hội viên A (N_truoc_dat = 3 buổi) và Hội viên B (N_truoc_dat = 3 buổi).
+- Một ca làm việc duy nhất của PT (18:00–19:00 ngày mai) đang ở trạng thái OPEN.
+
+Các bước thực hiện:
+1. Khởi tạo 2 phiên đăng nhập riêng biệt cho Hội viên A và Hội viên B.
+2. Sử dụng Promise.all gửi đồng thời 2 HTTP request POST /api/appointments cùng nhắm vào 1 slotId duy nhất tại cùng một thời điểm.
+3. Ghi nhận mã trạng thái HTTP và body phản hồi của cả 2 request.
+4. Truy vấn CSDL kiểm tra số buổi PT còn lại của Hội viên A, Hội viên B, trạng thái WorkingSlot và tổng số bản ghi Appointment gắn với slotId.","1. Nhờ khóa bi quan SELECT ... FOR UPDATE trên dòng WorkingSlot: chỉ đúng 01 request thành công (HTTP 201 Created), request còn lại bị từ chối với HTTP 409 Conflict (code = 'SLOT_ALREADY_BOOKED').
+2. Chỉ hội viên đặt thành công bị giữ 1 buổi PT (3 -> 2 buổi); hội viên bị từ chối giữ nguyên 3 buổi PT.
+3. Trong CSDL chỉ có duy nhất 01 lịch hẹn CONFIRMED hiệu lực gắn với ca đó; WorkingSlot ở trạng thái BOOKED.","1. Hai phản hồi trả về đúng cặp mã trạng thái [201, 409] (code: 'SLOT_ALREADY_BOOKED').
+2. Người đặt thành công giảm số dư từ 3 -> 2 buổi; người nhận 409 giữ nguyên 3 -> 3 buổi.
+3. CSDL chỉ ghi nhận đúng 01 bản ghi Appointment trên ca làm việc.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-003/ (evidence.json)"
+"UC08","TC-UC08-004","Hội viên hủy lịch hẹn khi còn ít nhất 12 giờ trước giờ bắt đầu được hoàn lại 1 buổi PT và mở lại ca (BVA >= 12h / A1)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead, CSDL fithub_test.
+- Hội viên có N_truoc_dat = 4 buổi PT; đã đặt thành công 1 ca tập cách thời điểm hiện tại > 24 giờ (>= 12 giờ), sau khi đặt còn N_sau_dat = 3 buổi PT.
+
+Các bước thực hiện:
+1. Trên Mobile của Hội viên, mở mục 'Lịch tập của tôi' -> tab 'Sắp tới', kiểm tra lịch hẹn đang ở trạng thái 'Đã xác nhận' và số dư '3 buổi PT còn lại'.
+2. Bấm nút 'Hủy lịch' trên lịch hẹn đó.
+3. Kiểm tra nội dung thông báo trên hộp thoại xác nhận hủy lịch.
+4. Bấm 'Xác nhận hủy' (POST /api/appointments/:id/cancel-by-member).
+5. Kiểm tra số dư buổi PT sau khi hủy, chuyển sang tab 'Đã hủy' trên Mobile và đối chiếu trạng thái Appointment + WorkingSlot trong CSDL.","1. Hộp thoại cảnh báo hiển thị rõ: 'Còn ít nhất 12 giờ: bạn được hoàn lại 1 buổi PT.'
+2. Sau khi xác nhận hủy: hoàn lại 1 buổi PT đã giữ, số dư quay về đúng mức trước khi đặt (N_truoc_dat = 4 -> N_sau_dat = 3 -> N_sau_huy = 4).
+3. Lịch hẹn chuyển sang trạng thái CANCELLED_BY_MEMBER, ptSessionState = REFUNDED, ptSessionOutcome = REFUND.
+4. Ca làm việc WorkingSlot được giải phóng về trạng thái OPEN (memberId = null) để hội viên khác có thể đặt.","1. Hộp thoại hiển thị đúng thông báo hoàn buổi khi >= 12 giờ.
+2. Số dư PT qua 3 mốc: Trước đặt = 4 -> Sau đặt = 3 -> Sau hủy = 4 buổi.
+3. Lịch chuyển CANCELLED_BY_MEMBER / REFUNDED; ca tập mở lại trạng thái OPEN.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-004/ (01..02.png, evidence.json)"
+"UC08","TC-UC08-005","PT hoặc Admin hủy lịch khi còn dưới 6 giờ trước giờ bắt đầu: hoàn 1 buổi + đền bù 1 buổi và khóa ca (BVA < 6h / A2)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead, CSDL fithub_test.
+- Hội viên có N_truoc_dat = 4 buổi PT; đặt 1 ca tập cách hiện tại ~1.5 giờ (< 6 giờ nhưng chưa bắt đầu); sau khi đặt số dư còn N_sau_dat = 3 buổi PT.
+
+Các bước thực hiện:
+1. Đăng nhập Web PT (trainer@fithub.vn) hoặc Admin, mở trang 'Lịch hẹn PT' (#/pt-bookings).
+2. Tìm dòng lịch hẹn vừa đặt, bấm nút 'PT hủy lịch'.
+3. Kiểm tra hộp thoại cảnh báo đỏ sát giờ (< 6 tiếng) và nhập lý do hủy: 'PT có lịch công tác đột xuất dưới 6 giờ'.
+4. Bấm 'Xác nhận hủy lịch' (POST /api/appointments/:id/cancel-by-pt).
+5. Quan sát thông báo kết quả, nhãn đền bù trên bảng Web và đối chiếu CSDL (số buổi PT của hội viên, cờ compensationGranted, trạng thái WorkingSlot).","1. Hộp thoại hiển thị cảnh báo đỏ: 'Hủy lịch sát giờ (< 6 tiếng): hội viên sẽ được hoàn lại buổi tập và được cộng đền bù thêm +1 buổi PT.'
+2. Hoàn lại 1 buổi đã giữ + cộng đền bù 1 buổi PT: N_truoc_dat = 4 -> N_sau_dat = 3 -> N_sau_huy = 5 buổi (3 + 1 hoàn + 1 đền bù; ptSessionsSnapshot nâng lên 5).
+3. Lịch hẹn chuyển sang CANCELLED_BY_PT, ptSessionState = REFUNDED, compensationGranted = true, lưu đúng cancelReason.
+4. Trên giao diện hiển thị rõ nhãn 'Đã đền bù thêm 1 buổi'.
+5. Ca làm việc WorkingSlot chuyển sang trạng thái UNAVAILABLE (không mở lại nhận đặt tiếp vì PT bận).","1. Hộp thoại Web hiện đúng cảnh báo đỏ < 6 tiếng; bắt buộc nhập lý do.
+2. Số dư PT qua 3 mốc: Trước đặt = 4 -> Sau đặt = 3 -> Sau hủy = 5 buổi (ptSessionsSnapshot = 5).
+3. Lịch chuyển CANCELLED_BY_PT / REFUNDED, compensationGranted = true; ca chuyển sang UNAVAILABLE.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-005/ (01..02.png, evidence.json)"
+"UC08","TC-UC08-006","Hội viên hủy lịch sát giờ (còn dưới 12 giờ nhưng chưa bắt đầu): mất buổi đã giữ, mở lại ca, không trừ buổi lần hai (BVA < 12h / A1)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead, CSDL fithub_test.
+- Hội viên có N_truoc_dat = 4 buổi PT; đặt 1 ca tập còn ~4 giờ trước giờ bắt đầu (< 12 giờ nhưng chưa bắt đầu); sau khi đặt còn N_sau_dat = 3 buổi PT.
+
+Các bước thực hiện:
+1. Đăng nhập Mobile bằng tài khoản Hội viên, kiểm tra số dư đang là '3 buổi PT còn lại'.
+2. Mở 'Lịch tập của tôi' -> tab 'Sắp tới', bấm nút 'Hủy lịch' trên ca tập còn < 12 giờ.
+3. Kiểm tra nội dung cảnh báo mất buổi trên hộp thoại xác nhận hủy.
+4. Bấm 'Xác nhận hủy' (POST /api/appointments/:id/cancel-by-member).
+5. Ghi nhận số buổi PT sau hủy (lần thứ 3), kiểm tra tab 'Đã hủy' và đối chiếu trạng thái Appointment, WorkingSlot trong CSDL.","1. Hộp thoại cảnh báo hiển thị rõ: 'Còn dưới 12 giờ: bạn mất 1 buổi PT nếu xác nhận hủy.'
+2. Lịch hẹn chuyển sang CANCELLED_BY_MEMBER, ptSessionState = CONSUMED, ptSessionOutcome = CONSUME.
+3. Không hoàn lại buổi đã giữ, đồng thời KHÔNG trừ thêm lần thứ hai lúc hủy: N_truoc_dat = 4 -> N_sau_dat = 3 -> N_sau_huy = 3 buổi.
+4. Ca làm việc WorkingSlot được mở lại trạng thái OPEN (memberId = null).","1. Mobile hiện đúng cảnh báo mất buổi khi còn dưới 12 giờ.
+2. Số dư PT qua 3 mốc: Trước đặt = 4 -> Sau đặt = 3 -> Sau hủy = 3 buổi (không bị trừ lần 2).
+3. Lịch chuyển CANCELLED_BY_MEMBER / CONSUMED; WorkingSlot mở lại OPEN.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-006/ (01..02.png, evidence.json)"
+"UC08","TC-UC08-007","PT hoặc Admin hủy lịch khi còn ít nhất 6 giờ trước giờ bắt đầu: chỉ hoàn 1 buổi, không đền bù và khóa ca (BVA >= 6h / A2)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead, CSDL fithub_test.
+- Hội viên có N_truoc_dat = 4 buổi PT; đặt 1 ca tập vào ngày mai lúc 15:30 (> 6 giờ trước giờ bắt đầu); sau khi đặt số dư còn N_sau_dat = 3 buổi PT.
+
+Các bước thực hiện:
+1. Đăng nhập Web PT (trainer@fithub.vn) hoặc Admin, vào trang 'Lịch hẹn PT' (#/pt-bookings).
+2. Tìm lịch hẹn còn >= 6 giờ, bấm nút 'PT hủy lịch'.
+3. Kiểm tra thông báo trên hộp thoại hủy lịch và nhập lý do: 'PT đổi lịch hội thảo chuyên môn trước 8 giờ'.
+4. Bấm 'Xác nhận hủy lịch' (POST /api/appointments/:id/cancel-by-pt).
+5. Đối chiếu số dư PT của hội viên, cờ compensationGranted và trạng thái WorkingSlot sau khi hủy.","1. Hộp thoại hiển thị thông báo: 'Hội viên sẽ được hoàn lại 1 buổi PT.' (không hiện cảnh báo đền bù).
+2. Hoàn đúng 01 buổi PT đã giữ, không cộng buổi đền bù: N_truoc_dat = 4 -> N_sau_dat = 3 -> N_sau_huy = 4 buổi (ptSessionsSnapshot giữ nguyên 4).
+3. Lịch hẹn chuyển sang CANCELLED_BY_PT, ptSessionState = REFUNDED, compensationGranted = false.
+4. Ca làm việc WorkingSlot chuyển sang UNAVAILABLE (không tiếp tục nhận đặt lịch).","1. Hộp thoại hiển thị đúng thông báo hoàn 1 buổi PT; không gắn nhãn đền bù.
+2. Số dư PT qua 3 mốc: Trước đặt = 4 -> Sau đặt = 3 -> Sau hủy = 4 buổi; compensationGranted = false.
+3. Lịch chuyển CANCELLED_BY_PT / REFUNDED; WorkingSlot chuyển sang UNAVAILABLE.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-007/ (01..02.png, evidence.json)"
+"UC08","TC-UC08-008","[Mở rộng] Kiểm tra biên chính xác 12h00/11h59, 6h00/5h59 và chống gửi lặp yêu cầu hủy lịch (Idempotency / Boundary Clock)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead, CSDL fithub_test, clock kiểm soát trong test suite.
+- Lịch hẹn đã hủy ở TC-UC08-006 và các lịch hẹn tại đúng ranh giới 12h00, 11h59, 6h00, 5h59.
+
+Các bước thực hiện:
+1. Gửi lại yêu cầu POST /api/appointments/:id/cancel-by-member lần thứ 2 trên cùng lịch hẹn đã hủy.
+2. Kiểm tra clock tại đúng mốc 12h00 (REFUND) so với 11h59 (CONSUME) khi hội viên hủy.
+3. Kiểm tra clock tại đúng mốc 6h00 (REFUND, compensationGranted=false) so với 5h59 (REFUND_WITH_COMPENSATION, compensationGranted=true) khi PT hủy.","1. Gửi lặp hủy lần 2 bị từ chối với HTTP 409 Conflict (code = 'APPOINTMENT_NOT_CONFIRMED'); số dư buổi PT không bị hoàn hoặc trừ thêm lần nữa.
+2. Tại đúng 12h00: REFUND; tại 11h59: CONSUME.
+3. Tại đúng 6h00: REFUND (không đền bù); tại 5h59: REFUND_WITH_COMPENSATION (+1 buổi đền bù).","1. Gửi lặp hủy lần 2 trả về đúng 409 APPOINTMENT_NOT_CONFIRMED, số dư giữ nguyên.
+2. Các mốc biên 12h00/11h59 và 6h00/5h59 đều xử lý chính xác 100%.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-008/evidence.json"
+"UC08","TC-UC08-009","[Mở rộng] Chỉ Admin xác minh vắng mặt (NO_SHOW) sau khi ca tập đã kết thúc; không tự động chuyển COMPLETED khi qua giờ (A3 / SR01)","Tiền điều kiện & Dữ liệu test:
+- Bản dựng: commit 3b28ead, CSDL fithub_test.
+- Một lịch hẹn CONFIRMED có thời gian kết thúc ca tập (endTime) đã qua.
+
+Các bước thực hiện:
+1. Kiểm tra lịch hẹn đã qua giờ kết thúc: hệ thống giữ nguyên CONFIRMED ('Chờ xác nhận kết quả' trên Mobile), không tự động chốt COMPLETED.
+2. Đăng nhập Web bằng tài khoản PT (trainer@fithub.vn): kiểm tra không có nút 'Xác minh vắng mặt (NO_SHOW)' (gọi API bằng token PT/Member trả về 403 FORBIDDEN; gọi trước giờ kết thúc trả về 400 SLOT_NOT_ENDED).
+3. Đăng nhập Web bằng tài khoản Admin (admin@fithub.vn): bấm nút 'Xác minh vắng mặt (NO_SHOW)' trên dòng lịch hẹn đã kết thúc.","1. Lịch hẹn đã qua giờ chưa xác nhận vẫn giữ trạng thái CONFIRMED (không tự chuyển COMPLETED).
+2. PT và Hội viên bị chặn 403 FORBIDDEN khi gọi verify-no-show; gọi trước khi ca kết thúc bị chặn 400 SLOT_NOT_ENDED.
+3. Khi Admin xác nhận sau giờ kết thúc: trả về 200 OK, lịch chuyển sang NO_SHOW, ptSessionState = CONSUMED, giữ nguyên số buổi đã trừ lúc đặt và ghi AuditLog VERIFY_NO_SHOW.","1. Lịch qua giờ không tự chuyển COMPLETED.
+2. Chỉ Admin thấy và bấm được nút 'Xác minh vắng mặt (NO_SHOW)'; sau khi bấm chuyển sang 'Vắng mặt' (NO_SHOW) / 'Đã trừ' (CONSUMED) và ghi AuditLog.","Pass","Trịnh Văn Hợp","16/11/2026","Commit: 3b28ead | DB: fithub_test | Minh chứng: evidence/UC08/TC-UC08-009/ (01-web-admin-no-show-verified.png, evidence.json)"

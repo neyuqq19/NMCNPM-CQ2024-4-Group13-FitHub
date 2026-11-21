@@ -1,0 +1,26 @@
+{
+  "case": "TC-UC08-006",
+  "executedAt": "2026-11-16T08:25:32.026Z",
+  "build": "3b28ead",
+  "database": {
+    "db": "fithub_test",
+    "port": 55432
+  },
+  "caseId": "TC-UC08-006",
+  "commit": "3b28ead",
+  "memberCode": "HV084677",
+  "appointmentCode": "LH000025",
+  "slotStartTime": "2026-11-16T10:00:00.000Z",
+  "cancelledAt": "2026-11-16T06:42:53.511Z",
+  "hoursBeforeStartApprox": 3.3,
+  "ptBalance": {
+    "beforeBook": 4,
+    "afterBook": 3,
+    "afterCancel": 3
+  },
+  "appointmentState": {
+    "status": "CANCELLED_BY_MEMBER",
+    "ptSessionState": "CONSUMED"
+  },
+  "slotStateAfterCancel": "OPEN"
+}
