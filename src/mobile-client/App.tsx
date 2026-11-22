@@ -1,3 +1,4 @@
+import { BottomNavigation } from "./src/BottomNavigation";
 import React, { useEffect, useState } from "react";
 import Feather from "@expo/vector-icons/Feather";
 import {
@@ -311,75 +312,6 @@ function FullBleedWorkoutLayout({
         {children}
       </View>
     </KeyboardAvoidingView>
-  );
-}
-
-function MetaballBottomDock({
-  activeIndex,
-  onSelectTab,
-}: {
-  activeIndex: number;
-  onSelectTab: (idx: number) => void;
-}) {
-  return (
-    <View style={styles.dockContainer}>
-      <View style={styles.dockWrap}>
-        {[0, 1, 2, 3].map((i) => {
-          const isActive = i === activeIndex;
-          return (
-            <Pressable
-              key={i}
-              accessibilityRole="button"
-              accessibilityLabel={
-                ["Trang chủ", "Tiến độ", "Mã QR", "Cá nhân"][i]
-              }
-              style={[
-                styles.dockCircle,
-                { backgroundColor: isActive ? C.lavender : "#ECECF2" },
-              ]}
-              onPress={() => onSelectTab(i)}
-            >
-              {i === 0 && <View style={styles.glyphHomeSquare} />}
-              {i === 1 && (
-                <View style={styles.glyphBarsRow}>
-                  <View style={[styles.glyphBar, { height: 10 }]} />
-                  <View style={[styles.glyphBar, { height: 17 }]} />
-                  <View style={[styles.glyphBar, { height: 13 }]} />
-                </View>
-              )}
-              {i === 2 && (
-                <View style={styles.glyphQrWrap}>
-                  <View style={styles.glyphQrRow}>
-                    <View style={styles.glyphQrCorner}>
-                      <View style={styles.glyphQrDot} />
-                    </View>
-                    <View style={styles.glyphQrCorner}>
-                      <View style={styles.glyphQrDot} />
-                    </View>
-                  </View>
-                  <View style={styles.glyphQrRow}>
-                    <View style={styles.glyphQrCorner}>
-                      <View style={styles.glyphQrDot} />
-                    </View>
-                    <View style={styles.glyphQrPattern}>
-                      <View style={styles.glyphQrPixel} />
-                      <View style={styles.glyphQrPixel} />
-                      <View style={styles.glyphQrPixel} />
-                    </View>
-                  </View>
-                </View>
-              )}
-              {i === 3 && (
-                <View style={styles.glyphProfileWrap}>
-                  <View style={styles.glyphProfileHead} />
-                  <View style={styles.glyphProfileShoulders} />
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
   );
 }
 
@@ -893,7 +825,7 @@ export default function App() {
                   )}
                 </ScrollView>
 
-                <MetaballBottomDock
+                <BottomNavigation
                   activeIndex={1}
                   onSelectTab={handleBottomDockSelect}
                 />
@@ -934,7 +866,7 @@ export default function App() {
                 }}
                 onHome={() => setScreen("01_HOME")}
               />
-              <MetaballBottomDock
+              <BottomNavigation
                 activeIndex={2}
                 onSelectTab={handleBottomDockSelect}
               />
@@ -1107,7 +1039,7 @@ export default function App() {
                   </Pressable>
                 </ScrollView>
 
-                <MetaballBottomDock
+                <BottomNavigation
                   activeIndex={1}
                   onSelectTab={handleBottomDockSelect}
                 />
@@ -1352,7 +1284,7 @@ export default function App() {
               </Pressable>
             </ScrollView>
 
-            <MetaballBottomDock
+            <BottomNavigation
               activeIndex={3}
               onSelectTab={handleBottomDockSelect}
             />
@@ -2135,113 +2067,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: C.white,
-  },
-  dockContainer: {
-    position: "absolute",
-    bottom: 16,
-    left: 22,
-    right: 22,
-    alignItems: "center",
-  },
-  dockWrap: {
-    width: 346,
-    height: 62,
-    borderRadius: 999,
-    backgroundColor: C.white,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-  },
-  dockCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2,
-  },
-  glyphHomeSquare: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: C.ink,
-  },
-  glyphBarsRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 3,
-    height: 17,
-  },
-  glyphBar: {
-    width: 3,
-    borderRadius: 1.5,
-    backgroundColor: C.ink,
-  },
-  glyphQrWrap: {
-    width: 20,
-    height: 20,
-    justifyContent: "space-between",
-  },
-  glyphQrRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: 20,
-    height: 9,
-  },
-  glyphQrCorner: {
-    width: 9,
-    height: 9,
-    borderWidth: 1.8,
-    borderColor: C.ink,
-    borderRadius: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  glyphQrDot: {
-    width: 2.5,
-    height: 2.5,
-    backgroundColor: C.ink,
-    borderRadius: 0.5,
-  },
-  glyphQrPattern: {
-    width: 9,
-    height: 9,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  glyphQrPixel: {
-    width: 3,
-    height: 3,
-    backgroundColor: C.ink,
-    borderRadius: 0.5,
-  },
-  glyphProfileWrap: {
-    alignItems: "center",
-    gap: 3,
-  },
-  glyphProfileHead: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: C.ink,
-  },
-  glyphProfileShoulders: {
-    width: 16,
-    height: 7,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: C.ink,
   },
   profileHeroCard: {
     backgroundColor: "#1E1E24",
