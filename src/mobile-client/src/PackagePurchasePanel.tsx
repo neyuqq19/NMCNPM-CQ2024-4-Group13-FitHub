@@ -317,7 +317,7 @@ export function PackagePurchasePanel({
     </View>
   );
   return (
-    <SafeAreaView style={s.root}>
+    <View style={s.root}>
       <View style={s.brandRow}>
         <Pressable
           accessibilityRole="button"
@@ -878,7 +878,7 @@ export function PackagePurchasePanel({
           </SafeAreaView>
         </Modal>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 const s = StyleSheet.create({
@@ -887,12 +887,14 @@ const s = StyleSheet.create({
     width: "100%",
     maxWidth: 430,
     alignSelf: "center",
-    padding: 20,
-    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
     gap: 16,
   },
   brandRow: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderColor: "#222227",
     flexDirection: "row",

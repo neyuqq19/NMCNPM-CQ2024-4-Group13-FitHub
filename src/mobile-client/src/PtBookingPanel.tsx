@@ -654,7 +654,10 @@ export function PtBookingPanel({
     return () => sub.remove();
   }, []);
   return (
-    <SafeAreaView style={s.root} edges={["top", "bottom"]}>
+    <View style={s.root}>
+      <View style={s.headerWrap}>
+        <MobileBackHeader onBack={onBack} onNotifications={onNotifications} />
+      </View>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={s.content}
@@ -666,7 +669,6 @@ export function PtBookingPanel({
           />
         }
       >
-        <MobileBackHeader onBack={onBack} onNotifications={onNotifications} />
         <Text accessibilityRole="header" style={s.heading}>
           Huấn luyện viên
         </Text>
@@ -754,17 +756,30 @@ export function PtBookingPanel({
           onBooked={refresh}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.phoneBg },
+  headerWrap: {
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 4,
+    backgroundColor: C.phoneBg,
+    borderBottomWidth: 1,
+    borderBottomColor: "#222227",
+    zIndex: 10,
+  },
   content: {
     width: "100%",
     maxWidth: 720,
     alignSelf: "center",
-    padding: 16,
-    paddingBottom: 48,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
     gap: 16,
   },
   heading: { color: C.white, fontSize: 28, fontWeight: "800" },

@@ -371,8 +371,10 @@ export function WorkoutLogPanel({
 
   return (
     <View style={s.root}>
-      <ScrollView ref={scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <View style={s.headerWrap}>
         <MobileBackHeader onBack={onBack} onNotifications={onNotifications} />
+      </View>
+      <ScrollView ref={scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
           <Text style={s.h1}>Nhật ký tập luyện</Text>
         </View>
@@ -705,7 +707,19 @@ export function WorkoutLogPanel({
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#121215" },
-  content: { padding: 16, paddingBottom: 40, width: "100%", maxWidth: 720, alignSelf: "center", gap: 12 },
+  headerWrap: {
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 4,
+    backgroundColor: "#121215",
+    borderBottomWidth: 1,
+    borderBottomColor: "#222227",
+    zIndex: 10,
+  },
+  content: { padding: 16, paddingTop: 12, paddingBottom: 40, width: "100%", maxWidth: 720, alignSelf: "center", gap: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },
   back: {
     width: 44,

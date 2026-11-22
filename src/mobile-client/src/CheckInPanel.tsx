@@ -140,11 +140,14 @@ export function CheckInPanel({
     ? Math.max(0, Math.ceil((Date.parse(qr.expiresAt) - now) / 1000))
     : 0;
   return (
-    <ScrollView style={s.root} contentContainerStyle={s.content}>
-      <MobileBackHeader onBack={onHome} onNotifications={onNotifications} />
-      <Text accessibilityRole="header" style={s.title}>
-        Thẻ vào phòng tập
-      </Text>
+    <View style={s.root}>
+      <View style={s.headerWrap}>
+        <MobileBackHeader onBack={onHome} onNotifications={onNotifications} />
+      </View>
+      <ScrollView contentContainerStyle={s.content}>
+        <Text accessibilityRole="header" style={s.title}>
+          Thẻ vào phòng tập
+        </Text>
       {result?.accepted ? (
         <View style={s.card} accessibilityLiveRegion="polite">
           <Feather name="check-circle" size={56} color={C.lime} />
@@ -222,12 +225,22 @@ export function CheckInPanel({
         </View>
       )}
 
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#161619" },
-  content: { padding: 16, paddingBottom: 150, gap: 22 },
+  headerWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 4,
+    backgroundColor: "#161619",
+    borderBottomWidth: 1,
+    borderBottomColor: "#222227",
+    zIndex: 10,
+  },
+  content: { padding: 16, paddingTop: 12, paddingBottom: 150, gap: 22 },
   title: { fontSize: 25, fontWeight: "800", color: "#fff", marginBottom: 12 },
   card: {
     backgroundColor: "#202024",

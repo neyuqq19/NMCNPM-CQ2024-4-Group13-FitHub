@@ -598,14 +598,29 @@ export default function App() {
 
             return (
               <View style={styles.darkScreenRoot}>
-                <ScrollView
-                  contentContainerStyle={styles.darkScrollContent}
-                  showsVerticalScrollIndicator={false}
+                <View
+                  style={{
+                    paddingHorizontal: 22,
+                    paddingTop: 4,
+                    paddingBottom: 4,
+                    backgroundColor: C.phoneBg,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#222227",
+                    zIndex: 10,
+                  }}
                 >
                   <MobileBackHeader
                     onBack={() => setScreen("01_HOME")}
                     onNotifications={() => setScreen("11_NOTIFICATIONS")}
                   />
+                </View>
+                <ScrollView
+                  contentContainerStyle={[
+                    styles.darkScrollContent,
+                    { paddingTop: 16 },
+                  ]}
+                  showsVerticalScrollIndicator={false}
+                >
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                     <Text style={{ color: C.white, fontSize: 25, fontWeight: "800", flex: 1 }}>Gói tập của tôi</Text>
                   </View>
