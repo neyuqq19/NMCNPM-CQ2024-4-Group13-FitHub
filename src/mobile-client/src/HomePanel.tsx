@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BottomNavigation } from "./BottomNavigation";
 import type { MyCheckInSummaryDto } from "@fithub/contracts";
 import type { MobileSession, MyMembershipSummary, ScreenId } from "./types";
 import {
@@ -40,7 +40,6 @@ export function HomePanel({
   progressRequest: number;
   onNavigate: (screen: ScreenId) => void;
 }) {
-  const insets = useSafeAreaInsets();
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const progressY = useRef(0);
   const [active, setActive] = useState(0);
@@ -291,39 +290,16 @@ export function HomePanel({
           />
         </View>
       </ScrollView>
-      <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        {(["home", "bar-chart-2", "grid", "user"] as const).map((icon, i) => (
-          <Pressable
-            key={icon}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active === i }}
-            accessibilityLabel={["Trang chủ", "Tiến độ", "Mã QR", "Cá nhân"][i]}
-            style={[s.tab, active === i && s.selected]}
-            onPress={() => {
-              if (i === 0) {
-                setActive(0);
-                scroll.current?.scrollTo({ y: 0 });
-              } else if (i === 1) showProgress();
-              else onNavigate(i === 2 ? "03_QR_CODE" : "09_PROFILE");
-            }}
-          >
-            <Feather
-              name={icon}
-              size={24}
-              color={active === i ? lime : "#B9B8C3"}
-            />
-            <Text
-              style={{
-                color: active === i ? lime : "#B9B8C3",
-                fontSize: 12,
-                fontWeight: "700",
-              }}
-            >
-              {["Trang chủ", "Tiến độ", "Mã QR", "Cá nhân"][i]}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <BottomNavigation
+        activeIndex={active}
+        onSelectTab={(index) => {
+          if (index === 0) {
+            setActive(0);
+            scroll.current?.scrollTo({ y: 0 });
+          } else if (index === 1) showProgress();
+          else onNavigate(index === 2 ? "03_QR_CODE" : "09_PROFILE");
+        }}
+      />
     </View>
   );
 }
@@ -441,23 +417,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dock: {
-    flexDirection: "row",
-    backgroundColor: "#28272E",
-    paddingTop: 8,
-    paddingHorizontal: 8,
-    borderTopWidth: 1,
-    borderColor: "#3B3A41",
-  },
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  selected: { backgroundColor: "#3B3B42" },
   error: { color: "#7C2424", fontSize: 14 },
   retry: { color: "#282035", fontWeight: "800", paddingVertical: 12 },
 });
