@@ -1,0 +1,21 @@
+{
+  "caseId": "TC-UC08-001",
+  "commit": "3b28ead",
+  "memberCode": "HV0816B9",
+  "trainerCode": "PT0000000035",
+  "appointmentCode": "LH000023",
+  "workDate": "2026-11-17",
+  "slotTimeVN": "15:00 - 16:00",
+  "ptBalance": {
+    "beforeBook": 4,
+    "afterBook": 3
+  },
+  "appointmentState": {
+    "status": "CONFIRMED",
+    "ptSessionState": "HELD"
+  },
+  "slotState": {
+    "beforeBook": "OPEN",
+    "afterBook": "BOOKED"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "caseId": "TC-UC08-008",
+  "commit": "3b28ead",
+  "scenario": "Duplicate cancel replay & idempotency protection",
+  "appointmentCode": "LH000025",
+  "replayResponseStatus": 409,
+  "replayResponseBody": {
+    "success": false,
+    "statusCode": 409,
+    "code": "APPOINTMENT_NOT_CONFIRMED",
+    "message": "Lịch hẹn này đã được xử lý trước đó.",
+    "timestamp": "2026-11-16T06:42:54.090Z",
+    "path": "/api/appointments/3a9b441f-df14-4ec6-97e0-6d87c7ad4dbf/cancel-by-member"
+  },
+  "ptBalanceBeforeReplay": 3,
+  "ptBalanceAfterReplay": 3
+}

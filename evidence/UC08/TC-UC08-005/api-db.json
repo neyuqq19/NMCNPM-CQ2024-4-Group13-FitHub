@@ -1,0 +1,33 @@
+{
+  "case": "TC-UC08-005",
+  "executedAt": "2026-11-16T08:25:32.023Z",
+  "build": "3b28ead",
+  "database": {
+    "db": "fithub_test",
+    "port": 55432
+  },
+  "caseId": "TC-UC08-005",
+  "commit": "3b28ead",
+  "actor": "trainer@fithub.vn (PT001)",
+  "memberCode": "HV087280",
+  "appointmentCode": "LH000018",
+  "slotStartTime": "2026-11-16T08:02:00.000Z",
+  "cancelledAt": "2026-11-16T06:27:54.073Z",
+  "hoursBeforeStartApprox": 3,
+  "cancelReason": "PT có lịch công tác đột xuất dưới 6 giờ",
+  "ptBalance": {
+    "beforeBook": 4,
+    "afterBook": 3,
+    "afterCancel": 5,
+    "snapshotAfterCancel": 5
+  },
+  "appointmentState": {
+    "status": "CANCELLED_BY_PT",
+    "ptSessionState": "REFUNDED",
+    "compensationGranted": true
+  },
+  "slotStateAfterCancel": {
+    "status": "UNAVAILABLE",
+    "unavailableReason": "PT có lịch công tác đột xuất dưới 6 giờ"
+  }
+}

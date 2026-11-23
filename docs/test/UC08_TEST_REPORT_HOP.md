@@ -1,0 +1,74 @@
+# Báo Cáo Kiểm Thử Chéo UC08: Đặt Lịch Hẹn PT 1-1 (`SCRUM-111`)
+
+- **Mã công việc Jira:** `SCRUM-111` — *[QA] Thiết kế và thực thi các ca kiểm thử đặt lịch PT (UC08)*
+- **Người kiểm thử (Tester):** Trịnh Văn Hợp (`24120318` — `trinhvanhop365@gmail.com`)
+- **Người hỗ trợ nghiệp vụ/kỹ thuật (Owner `UC08`):** Trương Minh Quang (`24120415` — `SCRUM-96`)
+- **Người tổng hợp báo cáo (`SCRUM-112`):** Nguyễn Trần Minh Trí (`24120461`)
+- **Ngày thực thi:** `16/11/2026`
+- **Bản dựng (Commit / Branch):** Commit `3b28ead` (trên `main`, thực thi trên nhánh QA `test/scrum-111-hop-uc08-qa`)
+- **Tài liệu tham chiếu:** `03-Hop-UC08-Dat-lich-PT.md`, `UC08_QUANG_DAT_LICH_HEN_PT.md`, `rup_sad.docx (v1.5)` Mục `4.5`, `rup_ucspec-v2_final.docx (v1.5)` Mục `3.3.4`
+
+---
+
+## 1. Môi Trường & Công Cụ Kiểm Thử
+
+| Hạng mục | Cấu hình thực tế |
+| :--- | :--- |
+| **Hệ điều hành** | Windows 11 (`x64`) |
+| **Runtime & Framework** | Node.js `v22+`, NestJS `11`, Prisma `6.19.3`, React `19` (Web Vite), React Native / Expo Web (Mobile) |
+| **Cơ sở dữ liệu kiểm thử** | PostgreSQL độc lập `fithub_test` tại `127.0.0.1:55432` (tách biệt 100% khỏi Supabase chung; không sửa đồng hồ hệ thống chung) |
+| **Công cụ kiểm thử** | • **Backend Integration & Clock Control:** Node Test Runner + Supertest (`src/backend/test/pt-bookings.test.ts`, `src/backend/test/pt-bookings-rules.test.ts`)<br>• **Web E2E Browser:** Playwright Microsoft Edge (`src/web-client/tests/pt-bookings.spec.ts`)<br>• **Mobile E2E & Concurrency API:** Playwright Mobile Viewport `390x844` (`src/mobile-client/tests/uc08-pt-booking-e2e.spec.ts`) |
+| **Tệp dữ liệu bàn giao** | • File Excel mẫu chuẩn: `docs/test/UC08_Test_Cases_Hop_SCRUM-111.xlsx` (Sheet `Test cases`)<br>• File CSV đối chiếu: `docs/test/UC08_Test_Cases_Hop_SCRUM-111.csv`<br>• Thư mục minh chứng: `evidence/UC08/TC-UC08-001` $\rightarrow$ `TC-UC08-009` |
+
+---
+
+## 2. Bảng Đối Chiếu Ba Mốc Số Buổi PT (`Trước đặt` $\rightarrow$ `Sau đặt` $\rightarrow$ `Sau hủy`)
+
+Để tránh nhầm lẫn giữa số buổi mẫu ban đầu và số buổi sau khi thao tác, bảng dưới đây ghi nhận chính xác biến động số dư buổi PT (`ptSessionsRemaining` / `ptSessionsSnapshot`) trong CSDL `fithub_test` qua từng ca kiểm thử:
+
+| Mã ca | Tình huống kiểm thử | Trước đặt (`Before`) | Sau đặt (`After Book`) | Sau hủy / Xác minh (`After Action`) | Trạng thái `Appointment` / `ptSessionState` | Trạng thái `WorkingSlot` sau cùng |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
+| **TC-UC08-001** | Đặt lịch PT thành công ($N \ge 1$) | `4` | **`3`** (`-1` giữ buổi) | *(Giữ lịch)* | `CONFIRMED` / `HELD` | `BOOKED` |
+| **TC-UC08-002** | Hội viên hết buổi PT ($N = 0$) thử đặt | `0` | **`0`** *(Từ chối `400`)* | — | *(Không tạo lịch)* | `OPEN` |
+| **TC-UC08-003** | 2 hội viên (`A`, `B`) cùng đặt 1 ca đồng thời | `A: 3`, `B: 3` | **Người thắng: `2`** (`201`)<br>**Người thua: `3`** (`409`) | — | `1` bản ghi `CONFIRMED` / `HELD` duy nhất | `BOOKED` |
+| **TC-UC08-004** | Hội viên hủy lịch còn $\ge 12\text{h}$ | `4` | `3` | **`4`** (`+1` hoàn buổi) | `CANCELLED_BY_MEMBER` / `REFUNDED` | `OPEN` *(Mở lại ca)* |
+| **TC-UC08-005** | PT/Admin hủy lịch sát giờ $< 6\text{h}$ | `4` | `3` | **`5`** (`3 + 1 hoàn + 1 đền bù`, `snapshot = 5`) | `CANCELLED_BY_PT` / `REFUNDED` (`compensationGranted = true`) | `UNAVAILABLE` *(Khóa ca)* |
+| **TC-UC08-006** | Hội viên hủy lịch sát giờ $< 12\text{h}$ | `4` | `3` | **`3`** *(Mất buổi đã giữ, không trừ lần 2)* | `CANCELLED_BY_MEMBER` / `CONSUMED` | `OPEN` *(Mở lại ca)* |
+| **TC-UC08-007** | PT/Admin hủy lịch còn $\ge 6\text{h}$ | `4` | `3` | **`4`** (`3 + 1 hoàn`, `compensationGranted = false`) | `CANCELLED_BY_PT` / `REFUNDED` (`compensationGranted = false`) | `UNAVAILABLE` *(Khóa ca)* |
+| **TC-UC08-008** | *(Mở rộng)* Gửi lặp hủy lần 2 & biên `12h00/11h59`, `6h00/5h59` | `4` | `3` | **`3`** *(Chặn `409`, không hoàn/trừ thêm)* | Giữ nguyên trạng thái đã hủy | Giữ nguyên |
+| **TC-UC08-009** | *(Mở rộng)* Admin xác minh `NO_SHOW` sau khi ca kết thúc | `2` | `1` | **`1`** *(Chốt trừ buổi đã giữ)* | `NO_SHOW` / `CONSUMED` | `BOOKED` |
+
+---
+
+## 3. Chi Tiết 7 Ca Kiểm Thử Chính & 2 Ca Mở Rộng (Theo Đúng 9 Cột Mẫu Excel)
+
+| Function/Feature ID | Case ID | Test case name | Test step | Expected Result (ER) | Actual Result | Status | Tester / Tested Date | Remark |
+| :---: | :---: | :--- | :--- | :--- | :--- | :---: | :---: | :--- |
+| **UC08** | **TC-UC08-001** | Hội viên còn buổi PT ($N \ge 1$) chọn PT và ca trống để đặt lịch hẹn 1-1 thành công *(Happy Path / EP hợp lệ)* | **Tiền điều kiện:** Commit `3b28ead`, DB `fithub_test`. PT đang `ACTIVE` có ca `OPEN` (`15:00–16:00` ngày kế tiếp). Hội viên có gói `GYM06` `ACTIVE`, số buổi trước đặt `N = 4`.<br>1. Đăng nhập Mobile, vào `"Tìm huấn luyện viên"`, ghi nhận `"4 buổi PT còn lại"`.<br>2. Chọn PT, bấm `"Xem hồ sơ & đặt lịch"`, chọn ngày mai và ca `"15:00 – 16:00"`.<br>3. Kiểm tra modal `"Xác nhận đặt lịch"` (`Còn 4 buổi · Giữ 1 buổi khi đặt`).<br>4. Bấm `"Xác nhận đặt lịch"`.<br>5. Kiểm tra danh sách lịch trên Mobile, Web Admin & Web PT (`#/pt-bookings`), bấm F5 tải lại trang. | • HTTP `201 Created`, tạo 1 lịch `CONFIRMED` (`ptSessionState = HELD`).<br>• Ca chuyển sang `BOOKED`.<br>• Số buổi còn lại giảm về `3` (`N - 1`).<br>• Web và Mobile hiển thị cùng mã `LHxxxxxx`, ngày, giờ; tải lại trang vẫn còn.<br>• Tạo 2 mốc `Reminder` (`24h`, `2h`) `PENDING`. | • Tạo đúng 1 lịch `CONFIRMED` (`HELD`), đóng ca sang `BOOKED`.<br>• Số dư PT: Trước đặt = `4` $\rightarrow$ Sau đặt = `3`.<br>• Mobile, Web Admin và Web PT hiển thị khớp mã/ngày/giờ; reload vẫn còn. | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-001/` (`01..05.png`, `evidence.json`) |
+| **UC08** | **TC-UC08-002** | Từ chối đặt lịch khi hội viên đã hết buổi PT khả dụng ($N = 0$) *(BVA biên dưới số buổi PT - BR01, E2)* | **Tiền điều kiện:** Hội viên `ACTIVE` nhưng `ptSessionsRemaining = 0`; ca PT `16:30–17:30` ngày mai đang `OPEN`.<br>1. Đăng nhập Mobile, kiểm tra hiển thị `"0 buổi PT còn lại"`.<br>2. Mở hồ sơ PT, chọn ngày mai và bấm vào ca `"16:30 – 17:30"`.<br>3. Quan sát thông báo lỗi trên modal và trạng thái nút `"Xác nhận đặt lịch"`.<br>4. Gửi trực tiếp `POST /api/appointments` với `slotId` để kiểm tra chốt chặn Backend. | • Modal Mobile báo `"Bạn không có gói còn buổi PT hợp lệ cho ngày tập này."` và khóa nút `"Xác nhận đặt lịch"`.<br>• API trả về `400 Bad Request` (`INSUFFICIENT_PT_SESSIONS`).<br>• Không tạo `Appointment`, không đóng ca (`OPEN`), số buổi giữ nguyên `0` (không âm). | • Modal hiện đúng thông báo lỗi và disable nút xác nhận.<br>• API trả về `400 INSUFFICIENT_PT_SESSIONS`.<br>• Số dư trước/sau = `0`, ca vẫn `OPEN`, `Appointment count = 0`. | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-002/` (`01-mobile-zero-pt-rejected.png`, `evidence.json`) |
+| **UC08** | **TC-UC08-003** | Chống đặt trùng khi hai hội viên cùng gửi đặt chung một ca trống đồng thời *(Concurrency / SR02 / E1)* | **Tiền điều kiện:** Hội viên A (`N = 3`) và Hội viên B (`N = 3`); 1 ca `OPEN` duy nhất (`18:00–19:00` ngày mai).<br>1. Tạo 2 phiên độc lập cho A và B.<br>2. Dùng `Promise.all` gửi đồng thời 2 request `POST /api/appointments` vào cùng `slotId`.<br>3. Kiểm tra 2 HTTP response, số dư của A, B và số bản ghi `Appointment` trong DB. | • Đúng 1 request `201 Created`, 1 request `409 Conflict` (`SLOT_ALREADY_BOOKED`).<br>• Chỉ người thành công bị giữ 1 buổi (`3 -> 2`); người thua giữ nguyên `3 buổi`.<br>• Chỉ có đúng 1 bản ghi `Appointment` hiệu lực trên ca. | • Cặp trạng thái trả về `[201, 409]` (`SLOT_ALREADY_BOOKED`).<br>• Người thắng còn `2 buổi`, người thua giữ nguyên `3 buổi`.<br>• DB chỉ có đúng `1` lịch hẹn trên ca. | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-003/` (`evidence.json`) |
+| **UC08** | **TC-UC08-004** | Hội viên hủy lịch khi còn ít nhất 12 giờ trước giờ bắt đầu: hoàn 1 buổi và mở lại ca *(BVA $\ge 12\text{h}$ / A1)* | **Tiền điều kiện:** Hội viên (`Trước đặt = 4`) đã đặt ca còn $> 24\text{h}$ (`Sau đặt = 3`).<br>1. Mở `"Lịch tập của tôi"` $\rightarrow$ tab `"Sắp tới"` trên Mobile.<br>2. Bấm `"Hủy lịch"`, kiểm tra thông báo trên modal.<br>3. Bấm `"Xác nhận hủy"`.<br>4. Kiểm tra số dư PT, tab `"Đã hủy"` và trạng thái ca trong DB. | • Modal báo `"Còn ít nhất 12 giờ: bạn được hoàn lại 1 buổi PT."`.<br>• Hoàn 1 buổi đã giữ (`4 -> 3 -> 4`).<br>• Lịch chuyển `CANCELLED_BY_MEMBER` / `REFUNDED`.<br>• Ca `WorkingSlot` mở lại `OPEN`. | • Modal hiện đúng thông báo hoàn buổi.<br>• Số dư PT: `4 -> 3 -> 4`.<br>• Lịch `CANCELLED_BY_MEMBER` / `REFUNDED`, ca mở lại `OPEN`. | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-004/` (`01..02.png`, `evidence.json`) |
+| **UC08** | **TC-UC08-005** | PT hoặc Admin hủy lịch khi còn dưới 6 giờ: hoàn 1 buổi + đền bù 1 buổi và khóa ca *(BVA $< 6\text{h}$ / A2)* | **Tiền điều kiện:** Hội viên (`Trước đặt = 4`) đặt ca còn $\approx 1.5\text{h}$ (`< 6h`, chưa bắt đầu; `Sau đặt = 3`).<br>1. Đăng nhập Web PT (`trainer@fithub.vn`), mở `#/pt-bookings`.<br>2. Bấm `"PT hủy lịch"`, kiểm tra cảnh báo đỏ và nhập lý do.<br>3. Bấm `"Xác nhận hủy lịch"`.<br>4. Kiểm tra số dư PT, cờ `compensationGranted` và trạng thái ca. | • Hiện cảnh báo đỏ hủy sát giờ `< 6 tiếng`.<br>• Hoàn 1 buổi + đền bù 1 buổi (`4 -> 3 -> 5`, `ptSessionsSnapshot = 5`).<br>• `CANCELLED_BY_PT` / `REFUNDED`, `compensationGranted = true`.<br>• Ca chuyển `UNAVAILABLE` (không mở lại). | • Hiện cảnh báo đỏ và nhãn `"Đã đền bù thêm 1 buổi"`.<br>• Số dư PT: `4 -> 3 -> 5` (`snapshot = 5`).<br>• `CANCELLED_BY_PT` / `REFUNDED`, `compensationGranted = true`, ca `UNAVAILABLE`. | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-005/` (`01..02.png`, `evidence.json`) |
+| **UC08** | **TC-UC08-006** | Hội viên hủy lịch khi còn dưới 12 giờ: mất buổi đã giữ, mở lại ca, không trừ lần hai *(BVA $< 12\text{h}$ / A1)* | **Tiền điều kiện:** Hội viên (`Trước đặt = 4`) đặt ca còn $\approx 4\text{h}$ (`< 12h`, chưa bắt đầu; `Sau đặt = 3`).<br>1. Mở `"Lịch tập của tôi"` $\rightarrow$ `"Sắp tới"` trên Mobile.<br>2. Bấm `"Hủy lịch"`, kiểm tra cảnh báo mất buổi.<br>3. Bấm `"Xác nhận hủy"`.<br>4. Kiểm tra 3 mốc số dư PT, trạng thái lịch và ca trong DB. | • Modal cảnh báo `"Còn dưới 12 giờ: bạn mất 1 buổi PT nếu xác nhận hủy."`.<br>• Lịch chuyển `CANCELLED_BY_MEMBER` / `CONSUMED`.<br>• Không hoàn buổi, không trừ thêm lần 2 (`4 -> 3 -> 3`).<br>• Ca mở lại `OPEN`. | • Hiện đúng cảnh báo mất buổi.<br>• Số dư PT: `4 -> 3 -> 3` (không bị trừ lần 2).<br>• Lịch `CANCELLED_BY_MEMBER` / `CONSUMED`, ca mở lại `OPEN`. | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-006/` (`01..02.png`, `evidence.json`) |
+| **UC08** | **TC-UC08-007** | PT hoặc Admin hủy lịch khi còn ít nhất 6 giờ: hoàn 1 buổi, không đền bù và khóa ca *(BVA $\ge 6\text{h}$ / A2)* | **Tiền điều kiện:** Hội viên (`Trước đặt = 4`) đặt ca ngày mai lúc `15:30` (`>= 6h`; `Sau đặt = 3`).<br>1. Đăng nhập Web PT (`trainer@fithub.vn`), mở `#/pt-bookings`.<br>2. Bấm `"PT hủy lịch"`, kiểm tra thông báo và nhập lý do.<br>3. Bấm `"Xác nhận hủy lịch"`.<br>4. Đối chiếu số dư PT, cờ `compensationGranted` và trạng thái ca. | • Modal báo `"Hội viên sẽ được hoàn lại 1 buổi PT."`.<br>• Hoàn đúng 1 buổi, không đền bù (`4 -> 3 -> 4`, `compensationGranted = false`).<br>• Lịch chuyển `CANCELLED_BY_PT` / `REFUNDED`.<br>• Ca chuyển `UNAVAILABLE` (không nhận đặt tiếp). | • Hiện thông báo hoàn 1 buổi, không có nhãn đền bù.<br>• Số dư PT: `4 -> 3 -> 4`, `compensationGranted = false`.<br>• Lịch `CANCELLED_BY_PT` / `REFUNDED`, ca `UNAVAILABLE`. | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-007/` (`01..02.png`, `evidence.json`) |
+| **UC08** | **TC-UC08-008** | *[Mở rộng]* Biên chính xác `12h00/11h59`, `6h00/5h59` và chống gửi lặp hủy lịch lần hai *(Idempotency / Boundary)* | 1. Gửi lặp `POST /api/appointments/:id/cancel-by-member` lần thứ 2 trên lịch đã hủy.<br>2. Kiểm tra clock tại biên `12h00` vs `11h59` (Hội viên hủy) và `6h00` vs `5h59` (PT hủy). | • Hủy lần 2 bị chặn `409 APPOINTMENT_NOT_CONFIRMED`, số dư không đổi.<br>• `12h00` hoàn buổi vs `11h59` trừ buổi; `6h00` chỉ hoàn vs `5h59` hoàn + đền bù 1 buổi. | • Hủy lặp trả về `409 APPOINTMENT_NOT_CONFIRMED`, số dư giữ nguyên `3`.<br>• Toàn bộ test biên trong `pt-bookings.test.ts` & `pt-bookings-rules.test.ts` đều PASS. | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-008/evidence.json` |
+| **UC08** | **TC-UC08-009** | *[Mở rộng]* Chỉ Admin xác minh `NO_SHOW` sau khi ca kết thúc; không tự chốt `COMPLETED` khi qua giờ *(A3 / SR01)* | 1. Kiểm tra lịch `CONFIRMED` đã qua `endTime` trên Mobile và Web PT.<br>2. Đăng nhập Web Admin (`admin@fithub.vn`), bấm `"Xác minh vắng mặt (NO_SHOW)"` trên lịch đã kết thúc. | • Qua giờ không tự chuyển `COMPLETED` (Mobile hiện `"Chờ xác nhận kết quả"`).<br>• PT/Member không có quyền xác nhận `NO_SHOW` (`403`).<br>• Admin xác nhận chuyển `NO_SHOW` / `CONSUMED`, ghi `AuditLog`. | • Lịch qua giờ giữ `CONFIRMED`, PT không thấy nút `NO_SHOW`.<br>• Admin bấm xác nhận thành công chuyển `Vắng mặt` (`NO_SHOW`) / `Đã trừ` (`CONSUMED`). | **Pass** | Trịnh Văn Hợp<br>16/11/2026 | Commit `3b28ead` \| Minh chứng: `evidence/UC08/TC-UC08-009/` (`01-web-admin-no-show-verified.png`, `evidence.json`) |
+
+---
+
+## 4. Kết Quả Lệnh Thực Thi Kiểm Thử Tự Động
+
+| Bộ kiểm thử | Lệnh chạy | Kết quả |
+| :--- | :--- | :---: |
+| **Unit & Integration Rules (`UC08`)** | `node --import tsx --test src/backend/test/pt-bookings-rules.test.ts src/backend/test/pt-bookings.test.ts` | **12 / 12 PASS** |
+| **Web E2E Playwright (`UC08`)** | `node src/scripts/test-e2e.mjs tests/pt-bookings.spec.ts` | **1 / 1 PASS** *(Kiểm tra `TC-UC08-001`, `005`, `007`, `009`)* |
+| **Mobile E2E & Concurrency (`UC08`)** | `node src/scripts/test-mobile.mjs tests/uc08-pt-booking-e2e.spec.ts` | **1 / 1 PASS** *(Kiểm tra `TC-UC08-001`, `002`, `003`, `004`, `006`, `008`)* |
+
+---
+
+## 5. Danh Sách Lỗi Nghiệp Vụ & Ghi Chú Kỹ Thuật
+
+- **Số lỗi nghiệp vụ `UC08` (Functional Bugs):** **`0 lỗi`** — Toàn bộ 7 ca chính (`TC-UC08-001` $\rightarrow$ `TC-UC08-007`) và 2 ca mở rộng (`TC-UC08-008`, `TC-UC08-009`) đều hoạt động khớp 100% với đặc tả `SAD v1.5` & `UCSpec v1.5`.
+- **Ghi chú kỹ thuật nhỏ gửi Quang (`prisma/seed.ts`):**
+  - Trong hàm `seedPtBookings` (`src/backend/prisma/seed.ts:592`), lịch mẫu `LHSEED02` tính giờ động theo `now + 3h`. Nếu DB test đã có sẵn một `WorkingSlot` của `PT001` cách `now + 3h` dưới `75 phút` (do chạy seed ở giờ trước đó rồi xóa `Appointment` mà chưa xóa `WorkingSlot`), lệnh `tx.workingSlot.upsert` có thể chạm ràng buộc loại trừ `WorkingSlot_trainerId_tsrange_excl` (15 phút đệm nghỉ). Khi chạy trên DB sạch hoặc giữ nguyên `LHSEED02` thì không bị ảnh hưởng.
+
