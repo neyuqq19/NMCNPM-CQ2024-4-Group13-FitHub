@@ -762,7 +762,7 @@ export default function App() {
                       <Svg width={112} height={112} viewBox="0 0 112 112">
                         <Circle cx={56} cy={56} r={43} fill="none" stroke={C.strokeDark} strokeWidth={26} />
                         <Circle cx={56} cy={56} r={43} fill="none" stroke={totalDays > 0 ? C.lavender : C.strokeDark} strokeWidth={26} />
-                        <Circle cx={56} cy={56} r={43} fill="none" stroke={C.lime} strokeWidth={26} strokeDasharray={`${2 * Math.PI * 43 * (totalDays > 0 ? Math.max(0, Math.min(1, remainingDays / totalDays)) : 0)} ${2 * Math.PI * 43}`} rotation={-90} origin="56, 56" />
+                        <Circle cx={56} cy={56} r={43} fill="none" stroke={C.lime} strokeWidth={26} strokeDasharray={[ 2 * Math.PI * 43 * (totalDays > 0 ? Math.max(0, Math.min(1, remainingDays / totalDays)) : 0), 2 * Math.PI * 43, ]} rotation={-90} origin="56, 56" />
                       </Svg>
                     </View>
                   </View>
